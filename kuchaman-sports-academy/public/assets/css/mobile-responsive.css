@@ -1,0 +1,517 @@
+/**
+ * KSA MOBILE RESPONSIVE STYLESHEET
+ * Strictly scoped to mobile screens (<= 767px and <= 360px).
+ * ZERO overrides or changes to desktop/tablet screens (> 767px).
+ */
+
+@media (max-width: 767px) {
+  /* ===================================================
+     1. GLOBAL MOBILE LAYOUT & OVERFLOW PROTECTION
+     =================================================== */
+  html, body {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+    width: 100% !important;
+    position: relative;
+  }
+
+  /* Prevent any container from pushing outside viewport */
+  .container,
+  [class*="max-w-"] {
+    max-width: 100% !important;
+  }
+
+  /* ===================================================
+     2. HERO SECTION & 4 STATISTIC CARDS REMOVAL
+     =================================================== */
+  /* Remove 4 Hero statistics frames completely from mobile view */
+  .ksa-hero-stats,
+  #home .mx-auto.max-w-\[560px\].mb-\[60px\] {
+    display: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Hero Typography & Spacing */
+  #home h1 {
+    font-size: clamp(32px, 8.5vw, 44px) !important;
+    line-height: 1.1 !important;
+    letter-spacing: -1.5px !important;
+    margin-bottom: 14px !important;
+  }
+
+  #home p.text-\[18px\] {
+    font-size: 15px !important;
+    line-height: 22px !important;
+    margin-bottom: 22px !important;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  #home .tp-btn {
+    height: 48px !important;
+    line-height: 48px !important;
+    padding-left: 26px !important;
+    padding-right: 26px !important;
+    font-size: 15px !important;
+  }
+
+  /* Remove excessive gap where stats used to be so hero flows smoothly to carousel */
+  #home .mb-\[60px\] {
+    margin-bottom: 20px !important;
+  }
+
+  /* Hero Marquee Image Carousel Sizing */
+  #home .tp-text-slide-active {
+    margin-top: 24px !important;
+    margin-bottom: 10px !important;
+  }
+
+  .ksa-hero-slider .swiper-slide,
+  #home .tp-text-slide-active .swiper-slide {
+    width: auto !important;
+  }
+
+  .ksa-hero-slider img,
+  #home .tp-text-slide-active img {
+    width: calc(100vw - 64px) !important;
+    max-width: 320px !important;
+    min-width: 250px !important;
+    height: 190px !important;
+    object-fit: cover !important;
+    border-radius: 12px !important;
+  }
+
+  /* ===================================================
+     3. FEATURE BAR (TOP BADGES)
+     =================================================== */
+  .pt-\[35px\].pb-\[120px\] {
+    padding-top: 20px !important;
+    padding-bottom: 50px !important;
+  }
+
+  [data-background*="feature-bar.jpg"] {
+    padding: 16px 14px !important;
+    gap: 14px !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    border-radius: 12px !important;
+  }
+
+  [data-background*="feature-bar.jpg"] > div {
+    width: 100% !important;
+    gap: 12px !important;
+  }
+
+  [data-background*="feature-bar.jpg"] .h-14.w-14 {
+    height: 42px !important;
+    width: 42px !important;
+    min-width: 42px !important;
+  }
+
+  [data-background*="feature-bar.jpg"] svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  [data-background*="feature-bar.jpg"] h3 {
+    font-size: 14px !important;
+    line-height: 1.25 !important;
+  }
+
+  [data-background*="feature-bar.jpg"] h3 span {
+    font-size: 12px !important;
+  }
+
+  /* ===================================================
+     4. WHY CHOOSE KSA SECTION (#why-ksa)
+     =================================================== */
+  #why-ksa {
+    padding-bottom: 60px !important;
+  }
+
+  #why-ksa h3 {
+    font-size: clamp(28px, 7.5vw, 38px) !important;
+    line-height: 1.15 !important;
+    letter-spacing: -1.5px !important;
+    margin-bottom: 10px !important;
+  }
+
+  #why-ksa p.text-\[18px\] {
+    font-size: 15px !important;
+    line-height: 22px !important;
+  }
+
+  /* Feature cards: reduce height from 505px/380px to compact 250px */
+  #why-ksa [data-background*="feature/"] {
+    height: 250px !important;
+    padding: 20px 18px !important;
+    margin-bottom: 16px !important;
+    border-radius: 12px !important;
+    background-size: cover !important;
+    background-position: center !important;
+  }
+
+  #why-ksa [data-background*="feature/"] h4 {
+    font-size: 20px !important;
+    line-height: 1.2 !important;
+    margin-bottom: 8px !important;
+  }
+
+  #why-ksa [data-background*="feature/"] p {
+    font-size: 13px !important;
+    line-height: 18px !important;
+    margin-bottom: 16px !important;
+  }
+
+  #why-ksa [data-background*="feature/"] .inline-flex {
+    padding: 8px 12px !important;
+    border-radius: 10px !important;
+  }
+
+  #why-ksa [data-background*="feature/"] .inline-flex h4 {
+    font-size: 26px !important;
+    margin-bottom: 0 !important;
+    line-height: 1 !important;
+  }
+
+  #why-ksa [data-background*="feature/"] .inline-flex p {
+    font-size: 12px !important;
+    line-height: 14px !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* ===================================================
+     5. CRICKET & SWIMMING CATEGORY SECTION (#cricket)
+     =================================================== */
+  #cricket {
+    padding-top: 40px !important;
+    padding-bottom: 60px !important;
+  }
+
+  #cricket span.text-\[180px\] {
+    font-size: 85px !important;
+    line-height: 1 !important;
+  }
+
+  #cricket h3 {
+    font-size: clamp(28px, 7.5vw, 38px) !important;
+    line-height: 1.15 !important;
+    letter-spacing: -1.5px !important;
+    margin-top: -25px !important;
+    margin-bottom: 10px !important;
+  }
+
+  #cricket p.text-\[17px\] {
+    font-size: 14px !important;
+    line-height: 20px !important;
+    margin-bottom: 24px !important;
+  }
+
+  /* Category cards: single column, controlled compact image height */
+  #cricket .group.rounded-\[12px\] {
+    margin-bottom: 16px !important;
+    padding: 8px !important;
+  }
+
+  #cricket .group img {
+    width: 100% !important;
+    height: 195px !important;
+    object-fit: cover !important;
+    border-radius: 10px !important;
+  }
+
+  #cricket .group h3 {
+    padding-top: 12px !important;
+    padding-bottom: 4px !important;
+    font-size: 16px !important;
+    margin-top: 0 !important;
+  }
+
+  #cricket .group p {
+    font-size: 13px !important;
+    padding-bottom: 6px !important;
+  }
+
+  #cricket .tp-btn {
+    height: 48px !important;
+    line-height: 48px !important;
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+    font-size: 15px !important;
+  }
+
+  /* ===================================================
+     6. FACILITIES SECTION (#facilities) — VIDEOS & PHOTOS
+     =================================================== */
+  #facilities {
+    padding-top: 50px !important;
+    padding-bottom: 50px !important;
+  }
+
+  #facilities h3 {
+    font-size: clamp(30px, 8vw, 42px) !important;
+    line-height: 1.1 !important;
+    letter-spacing: -1.5px !important;
+    margin-bottom: 10px !important;
+  }
+
+  #facilities p.text-\[18px\] {
+    font-size: 14px !important;
+    line-height: 20px !important;
+    margin-bottom: 20px !important;
+  }
+
+  #facilities .mb-\[80px\] {
+    margin-bottom: 24px !important;
+  }
+
+  /* Floating 4 Cricket Areas Card */
+  #facilities .inline-block.text-left.p-\[32px_36px\] {
+    padding: 18px 16px !important;
+    border-radius: 16px !important;
+    max-width: 100% !important;
+  }
+
+  #facilities .inline-block.text-left.p-\[32px_36px\] h2 {
+    font-size: 46px !important;
+  }
+
+  #facilities .inline-block.text-left.p-\[32px_36px\] p.text-\[17px\] {
+    font-size: 14px !important;
+    margin-bottom: 14px !important;
+  }
+
+  #facilities .inline-block.text-left.p-\[32px_36px\] .flex.items-center.gap-6 {
+    gap: 16px !important;
+    flex-wrap: wrap !important;
+    padding-top: 12px !important;
+  }
+
+  /* Facility Swiper Rows: Compact, single-screen-proportioned cards */
+  #facilities .swiper-container {
+    margin-bottom: 12px !important;
+  }
+
+  /* Video Cards in Swiper: 160px width x 210px height */
+  #facilities .swiper-slide .relative.bg-black.w-\[240px\].h-\[300px\],
+  .ksa-facility-video-card {
+    width: 160px !important;
+    height: 210px !important;
+    border-radius: 10px !important;
+  }
+
+  /* Photo Cards in Swiper: 270px width x 210px height */
+  #facilities .swiper-slide .relative.w-\[470px\].h-\[300px\],
+  .ksa-facility-img-card {
+    width: 270px !important;
+    height: 210px !important;
+    border-radius: 10px !important;
+  }
+
+  #facilities .swiper-slide img,
+  #facilities .swiper-slide video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    border-radius: 10px !important;
+  }
+
+  /* Bottom 4 Feature Cards (Cricket Practice, Team, Swimming, ₹100) */
+  #facilities .mt-\[30px\].mb-\[20px\] {
+    margin-top: 18px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .ksa-facility-grid,
+  #facilities .grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .ksa-facility-grid-card,
+  #facilities .p-5.rounded-\[12px\] {
+    padding: 12px 10px !important;
+    border-radius: 12px !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    min-height: 80px !important;
+  }
+
+  .ksa-facility-grid-card h4,
+  #facilities .p-5.rounded-\[12px\] h4 {
+    color: #ffffff !important;
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    margin-bottom: 4px !important;
+  }
+
+  .ksa-facility-grid-card p,
+  #facilities .p-5.rounded-\[12px\] p {
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-size: 11px !important;
+    line-height: 15px !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* ===================================================
+     7. BEST-IN-CLASS FEATURES ("features two")
+     =================================================== */
+  .pt-\[120px\].pb-\[120px\] {
+    padding-top: 50px !important;
+    padding-bottom: 50px !important;
+  }
+
+  .sticky.top-\[120px\] {
+    position: static !important;
+    margin-bottom: 20px !important;
+  }
+
+  .pt-\[120px\].pb-\[120px\] h3 {
+    font-size: clamp(28px, 7.5vw, 38px) !important;
+    line-height: 1.15 !important;
+    letter-spacing: -1.5px !important;
+  }
+
+  .gap-y-14 {
+    row-gap: 20px !important;
+  }
+
+  /* ===================================================
+     8. PLAYER TESTIMONIALS (#reviews)
+     =================================================== */
+  .review-overlay.pt-\[100px\].pb-\[100px\] {
+    padding-top: 50px !important;
+    padding-bottom: 50px !important;
+  }
+
+  .review-overlay h2 {
+    font-size: clamp(28px, 7.5vw, 38px) !important;
+    line-height: 1.15 !important;
+    letter-spacing: -1.5px !important;
+    margin-bottom: 20px !important;
+  }
+
+  /* Reduce huge 925px desktop height on mobile */
+  .h-\[925px\] {
+    height: 480px !important;
+  }
+
+  .tp-review-scrool-item .rounded-\[24px\] {
+    padding: 18px !important;
+    border-radius: 14px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .tp-review-scrool-item p {
+    font-size: 13px !important;
+    line-height: 20px !important;
+    margin-bottom: 14px !important;
+  }
+
+  /* ===================================================
+     9. FAQ ACCORDION (#faq)
+     =================================================== */
+  #faq {
+    padding-top: 50px !important;
+    padding-bottom: 50px !important;
+  }
+
+  #faq h3 {
+    font-size: clamp(28px, 7.5vw, 38px) !important;
+    line-height: 1.15 !important;
+    letter-spacing: -1.5px !important;
+  }
+
+  .accordion-button {
+    font-size: 16px !important;
+    line-height: 22px !important;
+    padding: 14px 0 !important;
+  }
+
+  .accordion-body p {
+    font-size: 14px !important;
+    line-height: 22px !important;
+  }
+
+  /* ===================================================
+     10. FOOTER & BOTTOM CTA
+     =================================================== */
+  footer .pt-\[110px\].pb-\[70px\] {
+    padding-top: 50px !important;
+    padding-bottom: 40px !important;
+  }
+
+  footer h3 {
+    font-size: clamp(32px, 8.5vw, 46px) !important;
+    line-height: 1.1 !important;
+    letter-spacing: -1.5px !important;
+  }
+
+  footer .tp-btn {
+    height: 50px !important;
+    line-height: 50px !important;
+    padding-left: 28px !important;
+    padding-right: 28px !important;
+    font-size: 15px !important;
+  }
+
+  footer .pb-\[120px\] {
+    padding-bottom: 40px !important;
+  }
+
+  /* Footer features pill: wrap cleanly on mobile */
+  footer .rounded-\[52px\] {
+    border-radius: 16px !important;
+    padding: 12px 14px !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    width: 100% !important;
+    text-align: center !important;
+  }
+
+  footer .rounded-\[52px\] .flex.items-center {
+    justify-content: center !important;
+  }
+}
+
+/* ===================================================
+   11. EXTRA FINE-TUNING FOR 320px–360px SCREENS
+   =================================================== */
+@media (max-width: 360px) {
+  #facilities .grid-cols-1.sm\:grid-cols-2.lg\:grid-cols-4 {
+    grid-template-columns: 1fr !important;
+  }
+
+  #facilities .swiper-slide .relative.w-\[470px\].h-\[300px\],
+  .ksa-facility-img-card {
+    width: 240px !important;
+    height: 190px !important;
+  }
+
+  #facilities .swiper-slide .relative.bg-black.w-\[240px\].h-\[300px\],
+  .ksa-facility-video-card {
+    width: 140px !important;
+    height: 190px !important;
+  }
+
+  .ksa-hero-slider img,
+  #home .tp-text-slide-active img {
+    width: calc(100vw - 36px) !important;
+    max-width: 270px !important;
+    height: 170px !important;
+  }
+
+  #home h1 {
+    font-size: 32px !important;
+  }
+}

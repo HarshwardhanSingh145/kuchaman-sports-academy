@@ -94,6 +94,7 @@ export default function HomePage() {
                 >
                   <HeroSection
                     onBookCricket={() => handleSelectSport('cricket')}
+                    onBookBigBox={() => handleSelectSport('cricket')}
                     onBookSwimming={() => handleSelectSport('swimming')}
                     onOpenAdmission={handleOpenAdmission}
                     onOpenMentor={() => handleOpenMentor()}

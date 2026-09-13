@@ -167,6 +167,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
     activeNet?.isBigBox ||
     activeNet?.name?.toUpperCase().includes('BIG BOX') ||
     activeNet?.code === 'BOX-CRICKET' ||
+    activeNet?.code === 'BOX-TURF' ||
     selectedNetId === 'net-big-box'
   );
 
@@ -773,8 +774,8 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                   </div>
                   <p className="text-xs sm:text-sm text-neutral-600 mt-1 pl-8">
                     {isHindi
-                      ? '3 नियमित नेट्स (अधिकतम 4 खिलाड़ी) या 1 विशेष BIG BOX CRICKET नेट (कोई सीमा नहीं)। शुल्क: ₹100 प्रति व्यक्ति।'
-                      : 'Choose between 3 regular practice nets (max 4 players) or BIG BOX CRICKET (no limit). Fee: ₹100 per person.'}
+                      ? '4 प्रैक्टिस नेट्स (अधिकतम 4 खिलाड़ी प्रति नेट) या 1 Cricket/Football/Hockey Big Box Turf (कोई सीमा नहीं)। शुल्क: ₹100 प्रति व्यक्ति।'
+                      : 'Choose between 4 practice nets (max 4 players) or Cricket/Football/Hockey Big Box Turf (no limit). Fee: ₹100 per person.'}
                   </p>
                 </div>
 
@@ -790,14 +791,15 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 )}
               </div>
 
-              {/* 4 Cricket Nets Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* 5 Cricket/Multi-Sport Facility Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                 {nets.map((net) => {
                   const isSelected = selectedNetId === net.id;
                   const isBigBox = Boolean(
                     net.isBigBox ||
                     net.name?.toUpperCase().includes('BIG BOX') ||
                     net.code === 'BOX-CRICKET' ||
+                    net.code === 'BOX-TURF' ||
                     net.id === 'net-big-box'
                   );
 

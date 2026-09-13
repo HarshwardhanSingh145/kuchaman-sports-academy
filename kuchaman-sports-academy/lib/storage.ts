@@ -273,9 +273,15 @@ function loadFromFile() {
       runtimeData.auditLogs = INITIAL_AUDIT_LOGS;
     }
 
-    // Ensure the 4 nets match the 3 regular nets (fee ₹100, max 4) + 1 BIG BOX CRICKET (fee ₹100, no limit)
-    const hasBigBox = runtimeData.nets?.some((n) => n.name?.toUpperCase().includes('BIG BOX'));
-    if (!hasBigBox || runtimeData.nets?.length !== 4) {
+    // Ensure the 5 nets match the 4 practice nets (fee ₹100, max 4) + 1 Cricket/football/Hockey big box turf (fee ₹100, no limit)
+    const hasBigBox = runtimeData.nets?.some(
+      (n) =>
+        n.name?.toUpperCase().includes('BIG BOX') ||
+        n.name?.toUpperCase().includes('CRICKET/FOOTBALL/HOCKEY') ||
+        n.id === 'net-big-box'
+    );
+    const hasNet4 = runtimeData.nets?.some((n) => n.id === 'net-4');
+    if (!hasBigBox || !hasNet4 || runtimeData.nets?.length !== 5) {
       runtimeData.nets = DEFAULT_NETS;
     }
     saveToFile();
@@ -372,7 +378,7 @@ export class StorageService {
           )
           .reduce((sum, b) => sum + b.playerCount, 0);
 
-        const isBigBox = Boolean(net.isBigBox || net.name?.toUpperCase().includes('BIG BOX') || net.code === 'BOX-CRICKET');
+        const isBigBox = Boolean(net.isBigBox || net.name?.toUpperCase().includes('BIG BOX') || net.code === 'BOX-CRICKET' || net.code === 'BOX-TURF');
         const capacity = isBigBox ? 100 : (custom.capacity ?? net.capacityPerSlot ?? 4);
         const totalBooked = bookedCount + (custom.booked ?? 0);
         const remaining = isBigBox ? 99 : Math.max(0, capacity - totalBooked);
@@ -538,10 +544,11 @@ export class StorageService {
         net?.isBigBox ||
         net?.name?.toUpperCase().includes('BIG BOX') ||
         net?.code === 'BOX-CRICKET' ||
+        net?.code === 'BOX-TURF' ||
         resourceId === 'net-big-box'
       );
 
-      // Rule: Regular nets have max 4 players; BIG BOX CRICKET has no max limit
+      // Rule: Regular nets have max 4 players; Big Box Turf has no max limit
       if (!isBigBox && playerCount > 4) {
         return {
           success: false,

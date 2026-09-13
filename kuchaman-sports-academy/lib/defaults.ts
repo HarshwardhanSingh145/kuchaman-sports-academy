@@ -12,7 +12,7 @@ import {
   AuditLog,
 } from './types';
 
-// Initial Nets Configuration (3 Regular Nets with Max 4 Players + 1 Special BIG BOX CRICKET Net with No Player Limit)
+// Initial Nets Configuration (4 Practice Nets with Max 4 Players + 1 Special Cricket/football/Hockey big box turf Net)
 export const DEFAULT_NETS: CricketNet[] = [
   {
     id: 'net-1',
@@ -54,14 +54,27 @@ export const DEFAULT_NETS: CricketNet[] = [
     maxPlayers: 4,
   },
   {
-    id: 'net-big-box',
-    name: 'BIG BOX CRICKET',
-    code: 'BOX-CRICKET',
-    description: 'Premier large enclosed arena for box cricket matches. No maximum player limit.',
-    turfType: 'All-Weather Box Arena',
-    capacityPerSlot: 100,
+    id: 'net-4',
+    name: 'Net 04 — Practice & Technique',
+    code: 'NET-04',
+    description: 'Dedicated training net for batting technique, bowling drills & solo practice. Maximum 4 players.',
+    turfType: 'All-Rounder Turf',
+    capacityPerSlot: 4,
     isActive: true,
     order: 4,
+    isBigBox: false,
+    pricePerPerson: 100,
+    maxPlayers: 4,
+  },
+  {
+    id: 'net-big-box',
+    name: 'Cricket/football/Hockey big box turf',
+    code: 'BOX-TURF',
+    description: 'Premier large enclosed arena for box cricket, football and hockey matches. 1 Big Turf Net.',
+    turfType: 'All-Weather Multi-Sport Arena',
+    capacityPerSlot: 100,
+    isActive: true,
+    order: 5,
     isBigBox: true,
     pricePerPerson: 100,
     maxPlayers: null,
