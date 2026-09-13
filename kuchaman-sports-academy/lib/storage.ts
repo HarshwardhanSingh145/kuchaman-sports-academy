@@ -28,6 +28,10 @@ import {
   DEFAULT_ACADEMY_SEAL,
   DEFAULT_SIGNATURE_CONFIG,
   DEFAULT_BIG_BOX_PRICING,
+  DEFAULT_BIG_BOX_OPENING_TIME,
+  DEFAULT_BIG_BOX_CLOSING_TIME,
+  generateBigBoxHourlySlots,
+  parseTimeToHourNumber,
   INITIAL_MENTORS,
   INITIAL_STUDENTS,
   INITIAL_CERTIFICATES,
@@ -283,8 +287,17 @@ function loadFromFile() {
     if (!runtimeData.config || !runtimeData.config.bigBoxPricing || runtimeData.config.bigBoxPricing.length === 0) {
       runtimeData.config = {
         ...(runtimeData.config || DEFAULT_CONFIG),
+        bigBoxOpeningTime: runtimeData.config?.bigBoxOpeningTime || DEFAULT_BIG_BOX_OPENING_TIME,
+        bigBoxClosingTime: runtimeData.config?.bigBoxClosingTime || DEFAULT_BIG_BOX_CLOSING_TIME,
         bigBoxPricing: DEFAULT_BIG_BOX_PRICING,
       };
+    } else {
+      if (!runtimeData.config.bigBoxOpeningTime) {
+        runtimeData.config.bigBoxOpeningTime = DEFAULT_BIG_BOX_OPENING_TIME;
+      }
+      if (!runtimeData.config.bigBoxClosingTime) {
+        runtimeData.config.bigBoxClosingTime = DEFAULT_BIG_BOX_CLOSING_TIME;
+      }
     }
 
     // Ensure the 5 nets match the 4 practice nets (fee ₹100, max 4) + 1 Cricket/football/Hockey big box turf (fee ₹100, no limit)
@@ -320,6 +333,23 @@ function saveToFile() {
 // Initialize on first load
 loadFromFile();
 
+function parseBookingHourRange(timeRangeStr: string, baseOpenH: number = 6): { startH: number; endH: number } | null {
+  try {
+    const cleaned = timeRangeStr.split('(')[0].trim();
+    const parts = cleaned.split(/[–—-]/).map((p) => p.trim());
+    if (parts.length < 2) return null;
+    let startH = parseTimeToHourNumber(parts[0]);
+    let endH = parseTimeToHourNumber(parts[1]);
+    if (startH < baseOpenH) startH += 24;
+    if (endH <= startH) {
+      endH += 24;
+    }
+    return { startH, endH };
+  } catch {
+    return null;
+  }
+}
+
 export class StorageService {
   /**
    * Manually trigger full cloud synchronization with Firestore
@@ -329,6 +359,20 @@ export class StorageService {
   }
 
   static getConfig(): AcademyConfig {
+    if (!runtimeData.config) {
+      runtimeData.config = { ...DEFAULT_CONFIG };
+    }
+    if (!runtimeData.config.bigBoxOpeningTime) {
+      runtimeData.config.bigBoxOpeningTime = DEFAULT_BIG_BOX_OPENING_TIME;
+    }
+    if (!runtimeData.config.bigBoxClosingTime) {
+      runtimeData.config.bigBoxClosingTime = DEFAULT_BIG_BOX_CLOSING_TIME;
+    }
+    if (!runtimeData.config.bigBoxPricing || runtimeData.config.bigBoxPricing.length === 0) {
+      runtimeData.config.bigBoxPricing = DEFAULT_BIG_BOX_PRICING;
+    } else if (!runtimeData.config.bigBoxPricing.some((t) => t.hours === 4)) {
+      runtimeData.config.bigBoxPricing.push({ id: 'tier-4', hours: 4, label: '4 Hours', price: 3200 });
+    }
     return runtimeData.config;
   }
 
@@ -374,35 +418,59 @@ export class StorageService {
     const slots: CricketSlot[] = [];
 
     const isDateDisabled = runtimeData.config.disabledDates.includes(date);
+    const openH = parseTimeToHourNumber(runtimeData.config.bigBoxOpeningTime || DEFAULT_BIG_BOX_OPENING_TIME);
 
     activeNets.forEach((net) => {
-      CRICKET_TIME_SLOTS.forEach((template) => {
+      const isBigBox = Boolean(
+        net.isBigBox ||
+        net.name?.toUpperCase().includes('BIG BOX') ||
+        net.code === 'BOX-CRICKET' ||
+        net.code === 'BOX-TURF' ||
+        net.id === 'net-big-box'
+      );
+
+      const templates = isBigBox
+        ? generateBigBoxHourlySlots(
+            runtimeData.config.bigBoxOpeningTime || DEFAULT_BIG_BOX_OPENING_TIME,
+            runtimeData.config.bigBoxClosingTime || DEFAULT_BIG_BOX_CLOSING_TIME
+          )
+        : CRICKET_TIME_SLOTS;
+
+      templates.forEach((template) => {
         const slotKey = `${net.id}_${date}_${template.startTime}`;
         const custom = runtimeData.customCricketSlots[slotKey] || {};
 
-        // Calculate booked count from real bookings
-        const bookedCount = runtimeData.bookings
-          .filter(
-            (b) =>
-              b.sport === 'cricket' &&
-              b.resourceId === net.id &&
-              b.date === date &&
-              b.timeRange === template.timeRange &&
-              b.status === 'CONFIRMED'
-          )
-          .reduce((sum, b) => sum + b.playerCount, 0);
+        let slotStartH = parseTimeToHourNumber(template.startTime);
+        let slotEndH = parseTimeToHourNumber(template.endTime);
+        if (isBigBox && slotStartH < openH) slotStartH += 24;
+        if (slotEndH <= slotStartH) slotEndH += 24;
 
-        const isBigBox = Boolean(net.isBigBox || net.name?.toUpperCase().includes('BIG BOX') || net.code === 'BOX-CRICKET' || net.code === 'BOX-TURF');
-        const capacity = isBigBox ? 100 : (custom.capacity ?? net.capacityPerSlot ?? 4);
-        const totalBooked = bookedCount + (custom.booked ?? 0);
-        const remaining = isBigBox ? 99 : Math.max(0, capacity - totalBooked);
+        // Calculate booked count & check if any confirmed booking covers this slot
+        const matchingBookings = runtimeData.bookings.filter((b) => {
+          if (b.sport !== 'cricket' || b.resourceId !== net.id || b.date !== date || b.status !== 'CONFIRMED') {
+            return false;
+          }
+          if (b.timeRange === template.timeRange) return true;
+          const range = parseBookingHourRange(b.timeRange, openH);
+          if (!range) return false;
+          return Math.max(slotStartH, range.startH) < Math.min(slotEndH, range.endH);
+        });
+
+        const isSlotBooked = matchingBookings.length > 0;
+        const bookedCount = matchingBookings.reduce((sum, b) => sum + b.playerCount, 0);
+
+        const capacity = isBigBox ? 1 : (custom.capacity ?? net.capacityPerSlot ?? 4);
+        const totalBooked = isBigBox ? (isSlotBooked ? 1 : 0) : (bookedCount + (custom.booked ?? 0));
+        const remaining = isBigBox ? (isSlotBooked ? 0 : 1) : Math.max(0, capacity - totalBooked);
 
         let status: SlotStatus = 'AVAILABLE';
         if (isDateDisabled || custom.status === 'CLOSED') {
           status = 'CLOSED';
-        } else if (!isBigBox && (remaining === 0 || custom.status === 'FULL')) {
+        } else if (isBigBox) {
+          status = isSlotBooked ? 'FULL' : 'AVAILABLE';
+        } else if (remaining === 0 || custom.status === 'FULL') {
           status = 'FULL';
-        } else if (!isBigBox && remaining <= 2) {
+        } else if (remaining <= 2) {
           status = 'LIMITED';
         }
 
@@ -418,7 +486,7 @@ export class StorageService {
           booked: totalBooked,
           remaining,
           status,
-          price: 100, // Dynamic ₹100 per person fee
+          price: isBigBox ? 1000 : 100,
         });
       });
     });
@@ -539,26 +607,11 @@ export class StorageService {
   }): { success: boolean; booking?: Booking; error?: string } {
     // 1. Validation & Race-condition prevention
     const { sport, resourceId, date, timeRange, playerCount } = bookingData;
-
+    let isBigBox = false;
     if (sport === 'cricket') {
       const slots = this.getCricketSlotsForDate(date);
-      const targetSlot = slots.find(
-        (s) =>
-          s.netId === resourceId &&
-          (s.timeRange === timeRange ||
-            timeRange.startsWith(s.timeRange) ||
-            s.timeRange.startsWith(timeRange.split(' (')[0]))
-      );
-
-      if (!targetSlot) {
-        return { success: false, error: 'Selected cricket slot does not exist.' };
-      }
-      if (targetSlot.status === 'CLOSED') {
-        return { success: false, error: 'This cricket slot is marked as CLOSED by academy admin.' };
-      }
-
       const net = this.getNets().find((n) => n.id === resourceId);
-      const isBigBox = Boolean(
+      isBigBox = Boolean(
         net?.isBigBox ||
         net?.name?.toUpperCase().includes('BIG BOX') ||
         net?.code === 'BOX-CRICKET' ||
@@ -566,19 +619,77 @@ export class StorageService {
         resourceId === 'net-big-box'
       );
 
-      // Rule: Regular nets have max 4 players; Big Box Turf has no max limit
-      if (!isBigBox && playerCount > 4) {
-        return {
-          success: false,
-          error: 'Regular cricket nets allow a maximum of 4 players at the same time.',
-        };
-      }
+      if (isBigBox) {
+        const openH = parseTimeToHourNumber(runtimeData.config.bigBoxOpeningTime || DEFAULT_BIG_BOX_OPENING_TIME);
+        const bookingRange = parseBookingHourRange(timeRange, openH);
+        if (bookingRange) {
+          const overlappingSlots = slots.filter((s) => {
+            if (s.netId !== resourceId) return false;
+            let slotStartH = parseTimeToHourNumber(s.startTime);
+            let slotEndH = parseTimeToHourNumber(s.endTime);
+            if (slotStartH < openH) slotStartH += 24;
+            if (slotEndH <= slotStartH) slotEndH += 24;
+            return Math.max(slotStartH, bookingRange.startH) < Math.min(slotEndH, bookingRange.endH);
+          });
+          if (overlappingSlots.length === 0) {
+            return { success: false, error: 'Selected Big Box slot does not exist.' };
+          }
+          const closedSlot = overlappingSlots.find((s) => s.status === 'CLOSED');
+          if (closedSlot) {
+            return { success: false, error: `Slot ${closedSlot.timeRange} is marked as CLOSED by academy admin.` };
+          }
+          const fullSlot = overlappingSlots.find((s) => s.status === 'FULL');
+          if (fullSlot) {
+            return { success: false, error: `Slot ${fullSlot.timeRange} is already booked.` };
+          }
+        } else {
+          const targetSlot = slots.find(
+            (s) =>
+              s.netId === resourceId &&
+              (s.timeRange === timeRange ||
+                timeRange.startsWith(s.timeRange) ||
+                s.timeRange.startsWith(timeRange.split(' (')[0]))
+          );
+          if (!targetSlot) {
+            return { success: false, error: 'Selected Big Box slot does not exist.' };
+          }
+          if (targetSlot.status === 'CLOSED') {
+            return { success: false, error: 'This Big Box slot is marked as CLOSED by academy admin.' };
+          }
+          if (targetSlot.status === 'FULL') {
+            return { success: false, error: 'This Big Box slot is already booked.' };
+          }
+        }
+      } else {
+        const targetSlot = slots.find(
+          (s) =>
+            s.netId === resourceId &&
+            (s.timeRange === timeRange ||
+              timeRange.startsWith(s.timeRange) ||
+              s.timeRange.startsWith(timeRange.split(' (')[0]))
+        );
 
-      if (!isBigBox && targetSlot.remaining < playerCount) {
-        return {
-          success: false,
-          error: `Insufficient spots available. Only ${targetSlot.remaining} spot(s) left in this net.`,
-        };
+        if (!targetSlot) {
+          return { success: false, error: 'Selected cricket slot does not exist.' };
+        }
+        if (targetSlot.status === 'CLOSED') {
+          return { success: false, error: 'This cricket slot is marked as CLOSED by academy admin.' };
+        }
+
+        // Rule: Regular nets have max 4 players
+        if (playerCount > 4) {
+          return {
+            success: false,
+            error: 'Regular cricket nets allow a maximum of 4 players at the same time.',
+          };
+        }
+
+        if (targetSlot.remaining < playerCount) {
+          return {
+            success: false,
+            error: `Insufficient spots available. Only ${targetSlot.remaining} spot(s) left in this net.`,
+          };
+        }
       }
     } else {
       const sessions = this.getSwimmingSessionsForDate(date);
@@ -602,7 +713,7 @@ export class StorageService {
     const prefix = sport === 'cricket' ? 'KSA-CRK' : 'KSA-SWM';
     const bookingId = `${prefix}-${randomNum}`;
 
-    const calculatedFee = sport === 'cricket' ? 100 * playerCount : (bookingData.amountPaid || 100 * playerCount);
+    const calculatedFee = sport === 'cricket' ? (isBigBox ? (bookingData.amountPaid || 1000) : 100 * playerCount) : (bookingData.amountPaid || 100 * playerCount);
 
     // Sanitize bookingData to remove undefined properties
     const cleanBookingData: Record<string, any> = {};

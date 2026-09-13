@@ -33,7 +33,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { CricketNet, CricketSlot, SwimmingSession, Booking, AcademyConfig, BigBoxPricingTier } from '@/lib/types';
-import { DEFAULT_BIG_BOX_PRICING } from '@/lib/defaults';
+import { DEFAULT_BIG_BOX_PRICING, DEFAULT_BIG_BOX_OPENING_TIME, DEFAULT_BIG_BOX_CLOSING_TIME } from '@/lib/defaults';
 import { useFirebase } from '@/lib/FirebaseContext';
 import { compressImageFile } from '@/lib/utils';
 import { AdminStudentManagementTab } from './AdminStudentManagementTab';
@@ -57,8 +57,10 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
     'student_management' | 'cricket_nets' | 'big_box_pricing' | 'cricket_slots' | 'swimming_sessions' | 'bookings' | 'payments' | 'payment_setup'
   >('student_management');
 
-  // Big Box Duration & Pricing State (Admin Controlled)
+  // Big Box Duration & Pricing & Timing State (Admin Controlled)
   const [bigBoxPricing, setBigBoxPricing] = useState<BigBoxPricingTier[]>(DEFAULT_BIG_BOX_PRICING);
+  const [bigBoxOpeningTime, setBigBoxOpeningTime] = useState(DEFAULT_BIG_BOX_OPENING_TIME);
+  const [bigBoxClosingTime, setBigBoxClosingTime] = useState(DEFAULT_BIG_BOX_CLOSING_TIME);
   const [savingBigBoxPricing, setSavingBigBoxPricing] = useState(false);
 
   // Config & Payment Settings State
@@ -168,6 +170,12 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
         if (configData.config.bigBoxPricing && Array.isArray(configData.config.bigBoxPricing) && configData.config.bigBoxPricing.length > 0) {
           setBigBoxPricing(configData.config.bigBoxPricing);
         }
+        if (configData.config.bigBoxOpeningTime) {
+          setBigBoxOpeningTime(configData.config.bigBoxOpeningTime);
+        }
+        if (configData.config.bigBoxClosingTime) {
+          setBigBoxClosingTime(configData.config.bigBoxClosingTime);
+        }
       }
     } catch (err) {
       console.error('Error loading admin data', err);
@@ -185,11 +193,13 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bigBoxPricing,
+          bigBoxOpeningTime,
+          bigBoxClosingTime,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setActionMessage('Big Box pricing and duration rules updated successfully!');
+        setActionMessage('Big Box pricing, duration and timing rules updated successfully!');
         if (onDataChanged) onDataChanged();
       } else {
         setActionMessage(data.error || 'Failed to save Big Box pricing');
@@ -679,7 +689,7 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
                   }`}
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-                  <span>Big Box Pricing</span>
+                  <span>Big Box Pricing & Timing</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('cricket_slots')}
@@ -982,11 +992,11 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-5 h-5 text-amber-600" />
                       <h4 className="text-lg sm:text-xl font-agbalumo text-[#2C1A0E] uppercase">
-                        Big Box Turf Pricing & Duration Control
+                        Big Box Pricing & Timing Control
                       </h4>
                     </div>
                     <p className="text-xs text-[#5C4033] mt-1">
-                      Configure duration options (1 Hour, 2 Hours, etc.) and total booking rates. Big Box is charged as a whole per booking, not per player.
+                      Configure duration options, flat booking rates, and operating hours (opening & closing times).
                     </p>
                   </div>
 
@@ -1026,6 +1036,51 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
                   <p className="text-neutral-600">
                     Customers booking Big Box will pay the exact price configured below for the chosen duration, regardless of whether 2, 8, or 15 players join.
                   </p>
+                </div>
+
+                {/* Timing Control Section */}
+                <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/50 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h5 className="text-sm font-bold text-[#2C1A0E] flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-amber-700" />
+                        <span>Big Box Operating Timing (Hourly Slots Generation)</span>
+                      </h5>
+                      <p className="text-xs text-neutral-600 mt-0.5">
+                        Set opening and closing timings. Hourly booking slots (e.g. 6:00 AM to 2:00 AM next day) will be automatically generated within this window.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-1">
+                        Opening Time
+                      </label>
+                      <input
+                        type="text"
+                        value={bigBoxOpeningTime}
+                        onChange={(e) => setBigBoxOpeningTime(e.target.value)}
+                        placeholder="06:00 AM"
+                        className="w-full px-3 py-2 text-sm font-bold border border-neutral-300 rounded-lg bg-white text-[#2C1A0E]"
+                      />
+                      <p className="text-[11px] text-neutral-500 mt-1">Default: 06:00 AM (Format: HH:MM AM/PM)</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider mb-1">
+                        Closing Time
+                      </label>
+                      <input
+                        type="text"
+                        value={bigBoxClosingTime}
+                        onChange={(e) => setBigBoxClosingTime(e.target.value)}
+                        placeholder="02:00 AM"
+                        className="w-full px-3 py-2 text-sm font-bold border border-neutral-300 rounded-lg bg-white text-[#2C1A0E]"
+                      />
+                      <p className="text-[11px] text-neutral-500 mt-1">Default: 02:00 AM (Runs until 2:00 AM next morning)</p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Duration & Pricing Tiers List */}

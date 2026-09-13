@@ -158,10 +158,59 @@ export const SWIMMING_TIME_SLOTS: Array<{
   },
 ];
 
+export const DEFAULT_BIG_BOX_OPENING_TIME = '06:00 AM';
+export const DEFAULT_BIG_BOX_CLOSING_TIME = '02:00 AM';
+
+export function parseTimeToHourNumber(timeStr: string): number {
+  if (!timeStr) return 6;
+  const parts = timeStr.trim().split(' ');
+  const [hStr] = parts[0].split(':');
+  let h = parseInt(hStr, 10);
+  const modifier = parts[1]?.toUpperCase() || 'AM';
+  if (modifier === 'PM' && h < 12) h += 12;
+  if (modifier === 'AM' && h === 12) h = 0;
+  return h;
+}
+
+export function formatHourNumberToTime(h: number): string {
+  const norm = ((h % 24) + 24) % 24;
+  const modifier = norm >= 12 ? 'PM' : 'AM';
+  let displayHour = norm % 12;
+  if (displayHour === 0) displayHour = 12;
+  const pad = displayHour < 10 ? `0${displayHour}` : `${displayHour}`;
+  return `${pad}:00 ${modifier}`;
+}
+
+export function generateBigBoxHourlySlots(
+  openingTime: string = DEFAULT_BIG_BOX_OPENING_TIME,
+  closingTime: string = DEFAULT_BIG_BOX_CLOSING_TIME
+): Array<{ startTime: string; endTime: string; timeRange: string; price: number }> {
+  let openH = parseTimeToHourNumber(openingTime);
+  let closeH = parseTimeToHourNumber(closingTime);
+
+  if (closeH <= openH) {
+    closeH += 24;
+  }
+
+  const slots = [];
+  for (let h = openH; h < closeH; h++) {
+    const startTime = formatHourNumberToTime(h);
+    const endTime = formatHourNumberToTime(h + 1);
+    slots.push({
+      startTime,
+      endTime,
+      timeRange: `${startTime} – ${endTime}`,
+      price: 1000,
+    });
+  }
+  return slots;
+}
+
 export const DEFAULT_BIG_BOX_PRICING: BigBoxPricingTier[] = [
   { id: 'tier-1', hours: 1, label: '1 Hour', price: 1000 },
   { id: 'tier-2', hours: 2, label: '2 Hours', price: 1800 },
   { id: 'tier-3', hours: 3, label: '3 Hours', price: 2500 },
+  { id: 'tier-4', hours: 4, label: '4 Hours', price: 3200 },
 ];
 
 export const DEFAULT_CONFIG: AcademyConfig = {
@@ -171,8 +220,10 @@ export const DEFAULT_CONFIG: AcademyConfig = {
   address: 'Near Stadium Bypass Road, Kuchaman City, Rajasthan',
   phone: '+91 98290 84421',
   email: 'info@kuchamansports.in',
-  operatingHours: '05:30 AM – 10:00 PM (Monday – Sunday)',
+  operatingHours: '06:00 AM – 02:00 AM (Monday – Sunday)',
   disabledDates: [],
+  bigBoxOpeningTime: DEFAULT_BIG_BOX_OPENING_TIME,
+  bigBoxClosingTime: DEFAULT_BIG_BOX_CLOSING_TIME,
   bigBoxPricing: DEFAULT_BIG_BOX_PRICING,
 };
 

@@ -93,7 +93,9 @@ export interface AcademyConfig {
   upiAccountName?: string; // e.g. Kuchaman Sports Academy
   bankName?: string;
   paymentInstructions?: string;
-  // Big Box Pricing Configuration (Controlled by Admin)
+  // Big Box Pricing & Timing Configuration (Controlled by Admin)
+  bigBoxOpeningTime?: string;
+  bigBoxClosingTime?: string;
   bigBoxPricing?: BigBoxPricingTier[];
 }
 

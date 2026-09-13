@@ -26,7 +26,13 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { CricketNet, CricketSlot, SwimmingSession, Booking, AcademyConfig, BigBoxPricingTier } from '@/lib/types';
-import { DEFAULT_BIG_BOX_PRICING } from '@/lib/defaults';
+import {
+  DEFAULT_BIG_BOX_PRICING,
+  parseTimeToHourNumber,
+  formatHourNumberToTime,
+  DEFAULT_BIG_BOX_OPENING_TIME,
+  DEFAULT_BIG_BOX_CLOSING_TIME,
+} from '@/lib/defaults';
 import { useLanguage } from '@/lib/LanguageContext';
 import { compressImageFile } from '@/lib/utils';
 
@@ -122,8 +128,8 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
     return dates;
   }, []);
 
-  // Duration Tier Selection for Big Box (Admin-Configured)
-  const [selectedDurationTierId, setSelectedDurationTierId] = useState<string>('tier-1');
+  // Continuous Multi-Hour Duration for Big Box (1, 2, 3, 4, etc.)
+  const [bigBoxDurationHours, setBigBoxDurationHours] = useState<number>(1);
 
   // Big Box Pricing Tiers (From Admin Config or Default)
   const bigBoxTiers: BigBoxPricingTier[] = React.useMemo(() => {
@@ -133,13 +139,37 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
     return DEFAULT_BIG_BOX_PRICING;
   }, [ownerConfig?.bigBoxPricing]);
 
+  // Dynamic price calculation based on admin tiers & hours (Flat per booking, NOT per person)
+  const getBigBoxPriceForHours = useCallback(
+    (hours: number): number => {
+      const exactTier = bigBoxTiers.find((t) => t.hours === hours);
+      if (exactTier) return exactTier.price;
+
+      const sortedTiers = [...bigBoxTiers].sort((a, b) => a.hours - b.hours);
+      if (sortedTiers.length === 0) return hours * 1000;
+      const maxTier = sortedTiers[sortedTiers.length - 1];
+      if (hours > maxTier.hours) {
+        const prevTier = sortedTiers.length > 1 ? sortedTiers[sortedTiers.length - 2] : null;
+        const hourlyRate = prevTier
+          ? (maxTier.price - prevTier.price) / (maxTier.hours - prevTier.hours)
+          : maxTier.price / maxTier.hours;
+        return maxTier.price + Math.round((hours - maxTier.hours) * hourlyRate);
+      }
+      return Math.round((maxTier.price / maxTier.hours) * hours);
+    },
+    [bigBoxTiers]
+  );
+
   const activeBigBoxTier: BigBoxPricingTier = React.useMemo(() => {
-    return (
-      bigBoxTiers.find((t) => t.id === selectedDurationTierId) ||
-      bigBoxTiers[0] ||
-      DEFAULT_BIG_BOX_PRICING[0]
-    );
-  }, [bigBoxTiers, selectedDurationTierId]);
+    const tier = bigBoxTiers.find((t) => t.hours === bigBoxDurationHours);
+    if (tier) return tier;
+    return {
+      id: `dynamic-${bigBoxDurationHours}`,
+      hours: bigBoxDurationHours,
+      label: `${bigBoxDurationHours} ${bigBoxDurationHours === 1 ? 'Hour' : 'Hours'}`,
+      price: getBigBoxPriceForHours(bigBoxDurationHours),
+    };
+  }, [bigBoxTiers, bigBoxDurationHours, getBigBoxPriceForHours]);
 
   // Fetch slot availability from API
   const fetchAvailability = useCallback(async () => {
@@ -223,24 +253,79 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
       const bb = nets.filter(
         (n) => n.id === 'net-big-box' || n.isBigBox || n.code === 'BOX-TURF' || n.name?.toUpperCase().includes('BIG BOX')
       );
-      return bb.length > 0 ? bb : nets.slice(0, 1);
+      if (bb.length > 0) return [bb[0]];
+      return [
+        {
+          id: 'net-big-box',
+          name: 'Big Box Turf Arena',
+          code: 'BOX-TURF',
+          description: 'Large multi-sport arena for cricket, football and hockey matches.',
+          turfType: 'FIFA & ICC Pro Turf',
+          capacityPerSlot: 1,
+          isActive: true,
+          order: 1,
+          isBigBox: true,
+          pricePerPerson: 1000,
+          maxPlayers: 30,
+        },
+      ];
     }
     return nets.filter(
       (n) => !(n.id === 'net-big-box' || n.isBigBox || n.code === 'BOX-TURF' || n.name?.toUpperCase().includes('BIG BOX'))
     );
   }, [sport, nets]);
 
-  // Available slots for selected net
+  // Available slots for selected net (sorted chronologically)
   const netSlots = React.useMemo(() => {
+    if (sport === 'bigbox') {
+      const bbId = selectedNetId || 'net-big-box';
+      return cricketSlots.filter(
+        (s) => s.netId === bbId || s.netId === 'net-big-box' || s.netName?.toUpperCase().includes('BIG BOX')
+      );
+    }
     if (!selectedNetId) return [];
     return cricketSlots.filter((s) => s.netId === selectedNetId);
-  }, [cricketSlots, selectedNetId]);
+  }, [sport, cricketSlots, selectedNetId]);
 
   // Selected slot details
   const activeSlot = React.useMemo(() => {
     if (!selectedSlotId) return null;
     return netSlots.find((s) => s.id === selectedSlotId) || null;
   }, [netSlots, selectedSlotId]);
+
+  // Maximum consecutive available hours starting from activeSlot
+  const maxAvailableConsecutiveHours = React.useMemo(() => {
+    if (!isBigBoxNet || !activeSlot) return 1;
+    const startIndex = netSlots.findIndex((s) => s.id === activeSlot.id);
+    if (startIndex === -1) return 1;
+
+    let count = 1;
+    for (let i = startIndex + 1; i < netSlots.length; i++) {
+      const nextSlot = netSlots[i];
+      if (nextSlot.status === 'CLOSED' || nextSlot.status === 'FULL' || nextSlot.remaining <= 0) {
+        break;
+      }
+      count++;
+    }
+    return count;
+  }, [isBigBoxNet, activeSlot, netSlots]);
+
+  // Keep duration bounded by available continuous slots
+  useEffect(() => {
+    if (isBigBoxNet && bigBoxDurationHours > maxAvailableConsecutiveHours) {
+      setBigBoxDurationHours(Math.max(1, maxAvailableConsecutiveHours));
+    }
+  }, [isBigBoxNet, maxAvailableConsecutiveHours, bigBoxDurationHours]);
+
+  // Computed end time for Big Box (e.g. 6:00 PM + 4 Hours = 10:00 PM; 10:00 PM + 4 Hours = 2:00 AM)
+  const computedBigBoxEndTime = React.useMemo(() => {
+    if (!activeSlot) return '';
+    const openH = parseTimeToHourNumber(ownerConfig?.bigBoxOpeningTime || DEFAULT_BIG_BOX_OPENING_TIME);
+    let startH = parseTimeToHourNumber(activeSlot.startTime);
+    if (startH < openH) startH += 24;
+    const endH = startH + bigBoxDurationHours;
+    return formatHourNumberToTime(endH);
+  }, [activeSlot, bigBoxDurationHours, ownerConfig?.bigBoxOpeningTime]);
 
   // Enforce player limits whenever net changes
   useEffect(() => {
@@ -254,7 +339,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
   // Regular cricket nets are ₹100 per person
   const feePerPerson = 100;
   const totalCricketFee = isBigBoxNet
-    ? activeBigBoxTier.price
+    ? getBigBoxPriceForHours(bigBoxDurationHours)
     : feePerPerson * Math.max(1, playerCount);
 
   // Handle Net Selection (Step 1)
@@ -272,14 +357,46 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
     setFormError('');
   };
 
-  // Handle Slot Selection (Step 3)
+  // Handle Slot Selection (Step 3: supports start slot and continuous multi-hour expansion)
   const handleSelectSlot = (slot: CricketSlot) => {
     if (slot.status === 'CLOSED' || slot.status === 'FULL' || slot.remaining <= 0) {
       return;
     }
+
+    if (isBigBoxNet && activeSlot) {
+      const startIndex = netSlots.findIndex((s) => s.id === activeSlot.id);
+      const clickedIndex = netSlots.findIndex((s) => s.id === slot.id);
+
+      if (clickedIndex <= startIndex) {
+        setSelectedSlotId(slot.id);
+        setBigBoxDurationHours(1);
+        setFormError('');
+        return;
+      }
+
+      // Check if all intermediate slots are available
+      let allAvailable = true;
+      for (let i = startIndex; i <= clickedIndex; i++) {
+        if (netSlots[i].status === 'CLOSED' || netSlots[i].status === 'FULL' || netSlots[i].remaining <= 0) {
+          allAvailable = false;
+          break;
+        }
+      }
+
+      if (allAvailable) {
+        setBigBoxDurationHours(clickedIndex - startIndex + 1);
+      } else {
+        setSelectedSlotId(slot.id);
+        setBigBoxDurationHours(1);
+      }
+      setFormError('');
+      return;
+    }
+
     setSelectedSlotId(slot.id);
-    // Ensure player count doesn't exceed slot remaining if regular net
-    if (!isBigBoxNet && playerCount > slot.remaining) {
+    if (isBigBoxNet) {
+      setBigBoxDurationHours(1);
+    } else if (playerCount > slot.remaining) {
       setPlayerCount(Math.min(4, Math.max(1, slot.remaining)));
     }
     setFormError('');
@@ -349,7 +466,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
       setFormError('');
 
       const finalTimeRange = isBigBoxNet
-        ? `${activeSlot.timeRange} (${activeBigBoxTier.label})`
+        ? `${activeSlot.startTime} – ${computedBigBoxEndTime} (${bigBoxDurationHours} ${bigBoxDurationHours === 1 ? 'Hour' : 'Hours'})`
         : activeSlot.timeRange;
 
       const res = await fetch('/api/bookings', {
@@ -367,7 +484,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
           playerCount: playerCount,
           experienceLevel: experience,
           notes: isBigBoxNet
-            ? `[Big Box Booking - Duration: ${activeBigBoxTier.label} - Rate: ₹${activeBigBoxTier.price}] ${notes}`.trim()
+            ? `[Big Box Booking - Start: ${activeSlot.startTime}, End: ${computedBigBoxEndTime}, Duration: ${bigBoxDurationHours} Hours, Rate: ₹${totalCricketFee}] ${notes}`.trim()
             : (notes.trim() || undefined),
           amountPaid: totalCricketFee,
           paymentStatus: 'PENDING_VERIFICATION',
@@ -872,160 +989,152 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 </div>
 
                 {/* STEP 1: CRICKET / BIG BOX NET SELECTION */}
-                <div className="bg-white border border-neutral-200 p-5 sm:p-7 rounded-2xl shadow-xs">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5 pb-4 border-b border-neutral-100">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-[#2C1A0E] text-white flex items-center justify-center text-xs font-bold">
-                          1
-                        </span>
-                        <h3 className="text-lg sm:text-xl font-bold text-[#2C1A0E]">
-                          {sport === 'bigbox'
-                            ? (isHindi ? 'चरण 1: बिग बॉक्स टर्फ़ एरिना' : 'Step 1: Big Box Turf Arena')
-                            : (isHindi ? 'चरण 1: अपना प्रैक्टिस नेट चुनें' : 'Step 1: Select Practice Net')}
-                        </h3>
+                {sport === 'bigbox' ? (
+                  <div className="bg-white border border-neutral-200 p-5 sm:p-7 rounded-2xl shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-amber-50/90 via-orange-50/50 to-white border-2 border-amber-300 shadow-xs">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-[#2C1A0E] text-white flex items-center justify-center font-bold shadow-md shrink-0">
+                          <Sparkles className="w-6 h-6 text-amber-300" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-extrabold text-amber-900 bg-amber-200/90 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                              BIG BOX
+                            </span>
+                            <span className="text-xs font-semibold text-neutral-500">
+                              BOX-TURF • Pro Astro Arena
+                            </span>
+                          </div>
+                          <h4 className="text-lg sm:text-xl font-extrabold text-[#2C1A0E] mt-1">
+                            {isHindi ? 'बिग बॉक्स टर्फ़ (Big Box Turf Arena)' : 'Big Box Turf Arena'}
+                          </h4>
+                          <p className="text-xs sm:text-sm text-neutral-600 mt-0.5">
+                            {isHindi
+                              ? 'केवल Big Box बुकिंग • पूरी बुकिंग का निश्चित शुल्क (प्रति व्यक्ति नहीं) • असीमित खिलाड़ी • 6:00 AM से 2:00 AM'
+                              : 'Exclusive Big Box Arena • Flat booking fee for the entire session (not per player) • Unlimited players • 6:00 AM to 2:00 AM'}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-xs sm:text-sm text-neutral-600 mt-1 pl-8">
-                        {sport === 'bigbox'
-                          ? (isHindi
-                              ? 'क्रिकेट / फुटबॉल / हॉकी मैचों हेतु 1 विशेष Big Box Turf Net। असीमित खिलाड़ी • पूरी बुकिंग का निश्चित शुल्क।'
-                              : '1 dedicated Big Box Turf arena for cricket, football and hockey matches. Flat booking fee for the entire arena.')
-                          : (isHindi
-                              ? '4 प्रैक्टिस नेट्स (अधिकतम 4 खिलाड़ी प्रति नेट)। शुल्क: ₹100 प्रति व्यक्ति।'
-                              : 'Choose from 4 practice nets (maximum 4 players per net). Fee: ₹100 per person.')}
-                      </p>
+                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-100 text-emerald-900 text-xs font-bold border border-emerald-300 shrink-0 self-start sm:self-auto shadow-xs">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>{isHindi ? 'BIG BOX चयनित' : 'BIG BOX SELECTED'}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white border border-neutral-200 p-5 sm:p-7 rounded-2xl shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5 pb-4 border-b border-neutral-100">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-[#2C1A0E] text-white flex items-center justify-center text-xs font-bold">
+                            1
+                          </span>
+                          <h3 className="text-lg sm:text-xl font-bold text-[#2C1A0E]">
+                            {isHindi ? 'चरण 1: अपना प्रैक्टिस नेट चुनें' : 'Step 1: Select Practice Net'}
+                          </h3>
+                        </div>
+                        <p className="text-xs sm:text-sm text-neutral-600 mt-1 pl-8">
+                          {isHindi
+                            ? '4 प्रैक्टिस नेट्स (अधिकतम 4 खिलाड़ी प्रति नेट)। शुल्क: ₹100 प्रति व्यक्ति।'
+                            : 'Choose from 4 practice nets (maximum 4 players per net). Fee: ₹100 per person.'}
+                        </p>
+                      </div>
+
+                      {activeNet && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedNetId('')}
+                          className="self-start sm:self-auto text-xs font-semibold text-[#8C5A32] hover:text-[#2C1A0E] flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>{isHindi ? 'नेट बदलें' : 'Change Net'}</span>
+                        </button>
+                      )}
                     </div>
 
-                    {activeNet && sport !== 'bigbox' && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedNetId('')}
-                        className="self-start sm:self-auto text-xs font-semibold text-[#8C5A32] hover:text-[#2C1A0E] flex items-center gap-1 cursor-pointer transition-colors"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        <span>{isHindi ? 'नेट बदलें' : 'Change Net'}</span>
-                      </button>
-                    )}
-                  </div>
+                    {/* Facility Cards: Cricket shows 4 Practice Nets */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {visibleNets.map((net) => {
+                        const isSelected = selectedNetId === net.id;
+                        return (
+                          <motion.div
+                            key={net.id}
+                            onClick={() => handleSelectNet(net.id)}
+                            whileHover={{ y: -4, scale: 1.01 }}
+                            whileTap={{ scale: 0.98 }}
+                            transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                            className={`relative p-5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between text-left ${
+                              isSelected
+                                ? 'border-[#2C1A0E] bg-amber-50/40 shadow-md ring-2 ring-[#2C1A0E]/10'
+                                : 'border-neutral-200 bg-white hover:border-neutral-400 hover:shadow-xs'
+                            }`}
+                          >
+                            <div>
+                              {/* Header: Code & Type */}
+                              <div className="flex items-center justify-between gap-2 mb-2">
+                                <span className="text-xs font-bold text-[#8C5A32]">
+                                  {net.code}
+                                </span>
+                                <span className="text-[11px] font-medium px-2 py-0.5 bg-neutral-100 text-neutral-700 rounded-md">
+                                  {net.turfType}
+                                </span>
+                              </div>
 
-                  {/* Facility Cards: Big Box shows ONLY Big Box; Cricket shows ONLY 4 Practice Nets */}
-                  <div className={`grid gap-4 ${
-                    sport === 'bigbox'
-                      ? 'grid-cols-1 max-w-xl mx-auto'
-                      : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
-                  }`}>
-                    {visibleNets.map((net) => {
-                      const isSelected = selectedNetId === net.id || sport === 'bigbox';
-                      const isBigBox = Boolean(
-                        sport === 'bigbox' ||
-                        net.isBigBox ||
-                        net.name?.toUpperCase().includes('BIG BOX') ||
-                        net.code === 'BOX-CRICKET' ||
-                        net.code === 'BOX-TURF' ||
-                        net.id === 'net-big-box'
-                      );
+                              {/* Net Name */}
+                              <h4 className="text-base sm:text-lg font-bold text-[#2C1A0E]">
+                                {net.name}
+                              </h4>
 
-                      return (
-                        <motion.div
-                          key={net.id}
-                          onClick={() => handleSelectNet(net.id)}
-                          whileHover={{ y: -4, scale: 1.01 }}
-                          whileTap={{ scale: 0.98 }}
-                          transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-                          className={`relative p-5 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between text-left ${
-                            isSelected
-                              ? 'border-[#2C1A0E] bg-amber-50/40 shadow-md ring-2 ring-[#2C1A0E]/10'
-                              : isBigBox
-                              ? 'border-amber-300/80 bg-gradient-to-b from-amber-50/60 to-white hover:border-[#8C5A32] shadow-xs'
-                              : 'border-neutral-200 bg-white hover:border-neutral-400 hover:shadow-xs'
-                          }`}
-                        >
-                          {/* Special highlight badge for BIG BOX */}
-                          {isBigBox && (
-                            <div className="absolute -top-3 left-4 bg-amber-700 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-xs flex items-center gap-1">
-                              <Sparkles className="w-3 h-3 text-amber-200" />
-                              <span>{isHindi ? 'विशेष एरिना • केवल 1 बिग बॉक्स' : 'EXCLUSIVE ARENA • 1 BIG BOX ONLY'}</span>
-                            </div>
-                          )}
-
-                          <div>
-                            {/* Header: Code & Type */}
-                            <div className="flex items-center justify-between gap-2 mb-2">
-                              <span className="text-xs font-bold text-[#8C5A32]">
-                                {net.code}
-                              </span>
-                              <span className="text-[11px] font-medium px-2 py-0.5 bg-neutral-100 text-neutral-700 rounded-md">
-                                {net.turfType}
-                              </span>
+                              {/* Description */}
+                              <p className="text-xs text-neutral-600 mt-1 line-clamp-2 leading-relaxed">
+                                {net.description}
+                              </p>
                             </div>
 
-                            {/* Net Name */}
-                            <h4 className="text-base sm:text-lg font-bold text-[#2C1A0E]">
-                              {net.name}
-                            </h4>
+                            {/* Footer: Capacity Rule & Pricing */}
+                            <div className="mt-5 pt-3 border-t border-neutral-100 space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-neutral-500 font-medium">
+                                  {isHindi ? 'क्षमता:' : 'Capacity:'}
+                                </span>
+                                <span className="font-semibold text-[#2C1A0E]">
+                                  {isHindi ? 'अधिकतम 4 खिलाड़ी' : 'Max 4 Players'}
+                                </span>
+                              </div>
 
-                            {/* Description */}
-                            <p className="text-xs text-neutral-600 mt-1 line-clamp-2 leading-relaxed">
-                              {net.description}
-                            </p>
-                          </div>
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-neutral-500 font-medium">
+                                  {isHindi ? 'शुल्क:' : 'Fee:'}
+                                </span>
+                                <span className="text-sm font-bold text-[#8C5A32]">
+                                  ₹100 <span className="text-xs font-normal text-neutral-600">/ {isHindi ? 'व्यक्ति' : 'person'}</span>
+                                </span>
+                              </div>
 
-                          {/* Footer: Capacity Rule & Pricing */}
-                          <div className="mt-5 pt-3 border-t border-neutral-100 space-y-2">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-neutral-500 font-medium">
-                                {isHindi ? 'क्षमता:' : 'Capacity:'}
-                              </span>
-                              <span className={`font-semibold ${isBigBox ? 'text-amber-800' : 'text-[#2C1A0E]'}`}>
-                                {isBigBox
-                                  ? (isHindi ? 'असीमित खिलाड़ी (पूरी टीम)' : 'Full Team Arena (No Limit)')
-                                  : (isHindi ? 'अधिकतम 4 खिलाड़ी' : 'Max 4 Players')}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-neutral-500 font-medium">
-                                {isHindi ? 'शुल्क:' : 'Fee:'}
-                              </span>
-                              <span className="text-sm font-bold text-[#8C5A32]">
-                                {isBigBox ? (
-                                  <span>
-                                    ₹{activeBigBoxTier.price}{' '}
-                                    <span className="text-xs font-normal text-neutral-600">
-                                      ({activeBigBoxTier.label} • {isHindi ? 'पूरा टर्फ़' : 'Flat Booking'})
-                                    </span>
-                                  </span>
+                              <button
+                                type="button"
+                                className={`w-full mt-2 py-2 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                                  isSelected
+                                    ? 'bg-[#2C1A0E] text-white shadow-xs'
+                                    : 'bg-neutral-100 text-neutral-800 hover:bg-neutral-200'
+                                }`}
+                              >
+                                {isSelected ? (
+                                  <>
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                                    <span>{isHindi ? 'चयनित (Selected)' : 'Selected'}</span>
+                                  </>
                                 ) : (
-                                  <span>
-                                    ₹100 <span className="text-xs font-normal text-neutral-600">/ {isHindi ? 'व्यक्ति' : 'person'}</span>
-                                  </span>
+                                  <span>{isHindi ? 'यह नेट चुनें' : 'Select Net'}</span>
                                 )}
-                              </span>
+                              </button>
                             </div>
-
-                            <button
-                              type="button"
-                              className={`w-full mt-2 py-2 px-3 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
-                                isSelected
-                                  ? 'bg-[#2C1A0E] text-white shadow-xs'
-                                  : 'bg-neutral-100 text-neutral-800 hover:bg-neutral-200'
-                              }`}
-                            >
-                              {isSelected ? (
-                                <>
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                                  <span>{isHindi ? 'चयनित (Selected)' : 'Selected'}</span>
-                                </>
-                              ) : (
-                                <span>{isHindi ? 'यह नेट चुनें' : 'Select Net'}</span>
-                              )}
-                            </button>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
+                          </motion.div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
 
             {/* STEP 2: DATE SELECTION (Revealed only after Net is selected) */}
             <AnimatePresence>
@@ -1148,56 +1257,138 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                     )}
                   </div>
 
-                  {/* ADMIN CONTROLLED DURATION SELECTOR FOR BIG BOX */}
+                  {/* CONTINUOUS MULTI-HOUR DURATION SELECTOR FOR BIG BOX */}
                   {isBigBoxNet && (
-                    <div className="mb-6 p-4 sm:p-5 rounded-xl bg-[#FAF8F5] border border-amber-200/80">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <div className="mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-amber-50/80 via-orange-50/40 to-white border border-amber-200/90 shadow-xs space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
-                          <span className="text-xs font-bold text-[#8C5A32] uppercase tracking-wider block">
-                            {isHindi ? 'बिग बॉक्स अवधि व दर (Admin Controlled Duration)' : 'Big Box Duration & Rates'}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-amber-700" />
+                            <span className="text-xs font-bold text-[#8C5A32] uppercase tracking-wider">
+                              {isHindi ? 'लगातार घंटे चुनें (Continuous Multi-Hour Duration)' : 'Select Booking Duration'}
+                            </span>
+                          </div>
                           <p className="text-xs text-neutral-600 mt-0.5">
                             {isHindi
-                              ? 'वांछित अवधि चुनें। कीमत पूरी बुकिंग की है, प्रति खिलाड़ी नहीं।'
-                              : 'Choose booking duration. Pricing is for the full arena, not per player.'}
+                              ? 'शुरुआती स्लॉट चुनें और जितने घंटे चाहें लगातार जोड़ें (6:00 AM से रात 2:00 AM तक)। शुल्क पूरी बुकिंग का है, प्रति व्यक्ति नहीं।'
+                              : 'Select starting slot and choose consecutive hours (6:00 AM to 2:00 AM next day). Fixed rate for full booking.'}
                           </p>
                         </div>
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold self-start sm:self-auto">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-700" />
-                          <span>{activeBigBoxTier.label} = ₹{activeBigBoxTier.price}</span>
-                        </span>
+
+                        {/* Hours Stepper Control */}
+                        {activeSlot && (
+                          <div className="flex items-center gap-2 self-start sm:self-auto">
+                            <span className="text-xs text-neutral-500 font-semibold mr-1">
+                              {isHindi ? 'अवधि:' : 'Hours:'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setBigBoxDurationHours((prev) => Math.max(1, prev - 1))}
+                              disabled={bigBoxDurationHours <= 1}
+                              className="w-8 h-8 rounded-lg bg-white border border-neutral-300 text-neutral-700 hover:bg-amber-100 flex items-center justify-center font-bold disabled:opacity-40 cursor-pointer shadow-xs transition-colors"
+                              title="Decrease hours"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="px-3 py-1 bg-white border border-amber-300 rounded-lg text-sm font-extrabold text-[#2C1A0E] min-w-[70px] text-center shadow-xs">
+                              {bigBoxDurationHours} {bigBoxDurationHours === 1 ? 'Hour' : 'Hours'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setBigBoxDurationHours((prev) => Math.min(maxAvailableConsecutiveHours, prev + 1))}
+                              disabled={bigBoxDurationHours >= maxAvailableConsecutiveHours}
+                              className="w-8 h-8 rounded-lg bg-white border border-neutral-300 text-neutral-700 hover:bg-amber-100 flex items-center justify-center font-bold disabled:opacity-40 cursor-pointer shadow-xs transition-colors"
+                              title="Increase hours"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-                        {bigBoxTiers.map((tier) => {
-                          const isTierSelected = activeBigBoxTier.id === tier.id;
-                          return (
-                            <button
-                              key={tier.id}
-                              type="button"
-                              onClick={() => setSelectedDurationTierId(tier.id)}
-                              className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                                isTierSelected
-                                  ? 'bg-[#2C1A0E] border-[#2C1A0E] text-white shadow-sm ring-2 ring-[#8C5A32]/20'
-                                  : 'bg-white border-neutral-200 text-neutral-800 hover:border-amber-400 hover:bg-amber-50/40'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className={`text-xs font-bold ${isTierSelected ? 'text-amber-300' : 'text-neutral-600'}`}>
-                                  {tier.label}
-                                </span>
-                                {isTierSelected && <CheckCircle2 className="w-3.5 h-3.5 text-amber-300" />}
-                              </div>
-                              <div className={`text-base sm:text-lg font-extrabold mt-1 ${isTierSelected ? 'text-white' : 'text-[#8C5A32]'}`}>
-                                ₹{tier.price}
-                              </div>
-                              <div className={`text-[10px] mt-0.5 ${isTierSelected ? 'text-white/80' : 'text-neutral-500'}`}>
-                                {isHindi ? 'पूरा टर्फ़ (Fixed Total)' : 'Total Booking'}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
+                      {/* Quick Duration Chips (1h, 2h, 3h, 4h, etc.) */}
+                      {activeSlot && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                          {Array.from({ length: Math.min(6, maxAvailableConsecutiveHours) }, (_, idx) => idx + 1).map((hrs) => {
+                            const isSelected = bigBoxDurationHours === hrs;
+                            const price = getBigBoxPriceForHours(hrs);
+                            return (
+                              <button
+                                key={hrs}
+                                type="button"
+                                onClick={() => setBigBoxDurationHours(hrs)}
+                                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-[#2C1A0E] border-[#2C1A0E] text-white shadow-sm ring-2 ring-[#8C5A32]/20'
+                                    : 'bg-white border-neutral-200 text-neutral-800 hover:border-amber-400 hover:bg-amber-50/50'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className={`text-xs font-bold ${isSelected ? 'text-amber-300' : 'text-neutral-700'}`}>
+                                    {hrs} {hrs === 1 ? 'Hour' : 'Hours'}
+                                  </span>
+                                  {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-amber-300" />}
+                                </div>
+                                <div className={`text-base sm:text-lg font-extrabold mt-1 ${isSelected ? 'text-white' : 'text-[#8C5A32]'}`}>
+                                  ₹{price}
+                                </div>
+                                <div className={`text-[10px] mt-0.5 ${isSelected ? 'text-white/80' : 'text-neutral-500'}`}>
+                                  {isHindi ? 'निश्चित कुल शुल्क' : 'Total Flat Price'}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Prominent Live Timing Breakdown */}
+                      {activeSlot ? (
+                        <div className="p-3.5 sm:p-4 rounded-xl bg-gradient-to-r from-[#2C1A0E] to-[#4A2D1A] text-white shadow-sm">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center sm:text-left divide-y sm:divide-y-0 sm:divide-x divide-white/15">
+                            <div className="py-1 sm:py-0 sm:pr-3">
+                              <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
+                                Start Time
+                              </span>
+                              <span className="text-sm sm:text-base font-bold text-white">
+                                {activeSlot.startTime}
+                              </span>
+                            </div>
+                            <div className="py-1 sm:py-0 sm:px-3">
+                              <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
+                                End Time
+                              </span>
+                              <span className="text-sm sm:text-base font-bold text-white">
+                                {computedBigBoxEndTime}
+                              </span>
+                            </div>
+                            <div className="py-1 sm:py-0 sm:px-3">
+                              <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
+                                Duration
+                              </span>
+                              <span className="text-sm sm:text-base font-bold text-white">
+                                {bigBoxDurationHours} {bigBoxDurationHours === 1 ? 'Hour' : 'Hours'}
+                              </span>
+                            </div>
+                            <div className="py-1 sm:py-0 sm:pl-3">
+                              <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider block">
+                                Total Price
+                              </span>
+                              <span className="text-base sm:text-xl font-extrabold text-amber-400">
+                                ₹{totalCricketFee}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-3 rounded-xl bg-amber-100/60 border border-amber-200 text-xs text-amber-900 flex items-center gap-2">
+                          <Info className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span>
+                            {isHindi
+                              ? 'नीचे से अपना आरंभ समय (Start Time Slot) चुनें। इसके बाद आप जितने घंटे चाहें लगातार जोड़ सकते हैं।'
+                              : 'Select your Start Time Slot from the hourly grid below. You can then combine consecutive hours.'}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1214,10 +1405,15 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-                      {netSlots.map((slot) => {
-                        const isSelected = selectedSlotId === slot.id;
+                      {netSlots.map((slot, index) => {
+                        const startIndex = activeSlot ? netSlots.findIndex((s) => s.id === activeSlot.id) : -1;
+                        const isStartSlot = activeSlot?.id === slot.id;
+                        const isPartOfSelectedRange = isBigBoxNet && activeSlot && (
+                          startIndex !== -1 && index >= startIndex && index < startIndex + bigBoxDurationHours
+                        );
+                        const isSelected = isBigBoxNet ? isPartOfSelectedRange : (selectedSlotId === slot.id);
                         const isClosed = slot.status === 'CLOSED';
-                        const isFull = !isBigBoxNet && (slot.status === 'FULL' || slot.remaining <= 0);
+                        const isFull = slot.status === 'FULL' || (!isBigBoxNet && slot.remaining <= 0);
 
                         return (
                           <motion.div
@@ -1232,7 +1428,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                                 : isFull
                                 ? 'bg-neutral-100 border-neutral-200 opacity-60 cursor-not-allowed'
                                 : isSelected
-                                ? 'bg-amber-50/50 border-[#2C1A0E] shadow-sm ring-2 ring-[#2C1A0E]/10 cursor-pointer'
+                                ? 'bg-amber-50/70 border-[#2C1A0E] shadow-sm ring-2 ring-[#2C1A0E]/10 cursor-pointer'
                                 : 'bg-neutral-50/60 border-neutral-200 hover:border-[#8C5A32] hover:bg-white cursor-pointer shadow-xs'
                             }`}
                           >
@@ -1250,12 +1446,22 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                                   </span>
                                 ) : isFull ? (
                                   <span className="text-[10px] font-bold px-2 py-0.5 bg-neutral-200 text-neutral-700 rounded-md">
-                                    {isHindi ? 'फुल' : 'Full'}
+                                    {isHindi ? 'फुल' : 'Booked'}
                                   </span>
                                 ) : isBigBoxNet ? (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md">
-                                    {isHindi ? 'ओपन एरिना' : 'Open Arena'}
-                                  </span>
+                                  isStartSlot ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 bg-[#2C1A0E] text-white rounded-md">
+                                      {isHindi ? 'आरंभ समय' : 'Start'}
+                                    </span>
+                                  ) : isPartOfSelectedRange ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 bg-amber-700 text-white rounded-md">
+                                      {isHindi ? `घंटा ${index - startIndex + 1}` : `Hour ${index - startIndex + 1}`}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md">
+                                      {isHindi ? 'उपलब्ध' : 'Available'}
+                                    </span>
+                                  )
                                 ) : slot.remaining <= 2 ? (
                                   <span className="text-[10px] font-bold px-2 py-0.5 bg-orange-100 text-orange-800 rounded-md">
                                     {slot.remaining} {isHindi ? 'स्थान शेष' : 'spots left'}
@@ -1274,7 +1480,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                               <div className="text-xs text-neutral-600 mt-1">
                                 {isBigBoxNet ? (
                                   <span className="text-amber-800 font-medium">
-                                    {isHindi ? `पूरा टर्फ़ आरक्षित • ${activeBigBoxTier.label}` : `Full Arena • ${activeBigBoxTier.label}`}
+                                    {isHindi ? '1-घंटे का स्लॉट • लगातार जोड़ सकते हैं' : '1-Hr Hourly Slot • Continuous'}
                                   </span>
                                 ) : (
                                   <span className="text-neutral-500 font-medium">
@@ -1287,11 +1493,8 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                             <div className="mt-4 pt-3 border-t border-neutral-100 flex items-center justify-between text-xs">
                               <span className="font-bold text-[#8C5A32]">
                                 {isBigBoxNet ? (
-                                  <span>
-                                    ₹{activeBigBoxTier.price}{' '}
-                                    <span className="text-[11px] font-normal text-neutral-500">
-                                      ({activeBigBoxTier.label} • {isHindi ? 'पूरा टर्फ़' : 'Full Arena'})
-                                    </span>
+                                  <span className="text-xs text-neutral-700 font-semibold">
+                                    {isHindi ? 'नियमित स्लॉट' : 'Hourly Slot'}
                                   </span>
                                 ) : (
                                   <span>
@@ -1311,7 +1514,15 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                                     : 'bg-white border border-neutral-300 text-neutral-800 hover:bg-[#2C1A0E] hover:text-white'
                                 }`}
                               >
-                                {isSelected ? (isHindi ? 'चयनित' : 'Selected') : (isHindi ? 'चुनें' : 'Select')}
+                                {isStartSlot
+                                  ? (isHindi ? 'आरंभ स्लॉट' : 'Start Slot')
+                                  : isPartOfSelectedRange
+                                  ? (isHindi ? 'चयनित' : 'Selected')
+                                  : isClosed
+                                  ? (isHindi ? 'बंद' : 'Closed')
+                                  : isFull
+                                  ? (isHindi ? 'बुक है' : 'Booked')
+                                  : (isHindi ? 'चुनें' : 'Select')}
                               </button>
                             </div>
                           </motion.div>
@@ -1462,17 +1673,20 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                             {isHindi ? 'शुल्क गणना (Admin Configured Pricing)' : 'Price Breakdown'}
                           </span>
                           {isBigBoxNet ? (
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-2 text-sm text-neutral-800 font-bold">
-                                <span>Big Box Turf ({activeBigBoxTier.label})</span>
-                                <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-2 text-sm text-neutral-800 font-bold">
+                                <span>Big Box Turf ({activeSlot.startTime} – {computedBigBoxEndTime})</span>
+                                <span className="text-xs font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                                  {bigBoxDurationHours} {bigBoxDurationHours === 1 ? 'Hour' : 'Hours'}
+                                </span>
+                                <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                   {isHindi ? 'निश्चित कुल शुल्क' : 'Flat Booking Rate'}
                                 </span>
                               </div>
-                              <p className="text-xs text-neutral-500">
+                              <p className="text-xs text-neutral-600">
                                 {isHindi
-                                  ? `${playerCount} खिलाड़ी खेल रहे हैं • कुल शुल्क ₹${activeBigBoxTier.price} ही रहेगा (खिलाड़ी संख्या से कीमत नहीं बदलेगी)`
-                                  : `${playerCount} players participating • Total charge remains ₹${activeBigBoxTier.price} regardless of player count`}
+                                  ? `${playerCount} खिलाड़ी भाग ले रहे हैं • कुल शुल्क ₹${totalCricketFee} ही रहेगा (खिलाड़ी संख्या बदलने से कीमत नहीं बदलेगी)`
+                                  : `${playerCount} players participating • Total charge remains ₹${totalCricketFee} regardless of player count`}
                               </p>
                             </div>
                           ) : (
