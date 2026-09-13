@@ -144,18 +144,26 @@
     slidesPerView: "auto",
     spaceBetween: isSmallScreen ? 12 : 16,
     centeredSlides: true,
-    allowTouchMove: false,
-    speed: isSmallScreen ? 12000 : 10000,
-    loopedSlides: isSmallScreen ? 4 : 6,
+    allowTouchMove: true,
+    grabCursor: true,
+    speed: 10000,
+    loopedSlides: 12,
     autoplay: {
       delay: 1,
       disableOnInteraction: false,
+      pauseOnMouseEnter: false,
     },
     on: {
       init: function () {
         setTimeout(checkVisibleVideos, 350);
       },
-      setTranslate: function () {
+      touchEnd: function () {
+        var sw = this;
+        setTimeout(function () {
+          if (sw.autoplay && !sw.autoplay.running) {
+            sw.autoplay.start();
+          }
+        }, 100);
         scheduleVideoCheck();
       },
       slideChange: function () {
@@ -166,6 +174,13 @@
       }
     },
   });
+
+  // Periodic check while facilities section is visible on screen
+  setInterval(function () {
+    if (sectionInView) {
+      checkVisibleVideos();
+    }
+  }, 600);
 
   // Event handlers
   $(window).on("load", function () {

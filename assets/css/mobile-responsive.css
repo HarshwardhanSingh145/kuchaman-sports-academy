@@ -296,11 +296,8 @@
     overflow: hidden !important;
   }
 
-  #facilities .tp-text-slide-active,
   #facilities .tp-text-slide-active .swiper-wrapper {
-    transform: translate3d(0, 0, 0) !important;
-    -webkit-transform: translate3d(0, 0, 0) !important;
-    will-change: transform !important;
+    will-change: transform;
   }
 
   /* Video Cards in Swiper: 160px width x 210px height */
