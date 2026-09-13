@@ -293,6 +293,14 @@
   /* Facility Swiper Rows: Compact, single-screen-proportioned cards */
   #facilities .swiper-container {
     margin-bottom: 12px !important;
+    overflow: hidden !important;
+  }
+
+  #facilities .tp-text-slide-active,
+  #facilities .tp-text-slide-active .swiper-wrapper {
+    transform: translate3d(0, 0, 0) !important;
+    -webkit-transform: translate3d(0, 0, 0) !important;
+    will-change: transform !important;
   }
 
   /* Video Cards in Swiper: 160px width x 210px height */
@@ -301,6 +309,12 @@
     width: 160px !important;
     height: 210px !important;
     border-radius: 10px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+    transform: translateZ(0) !important;
+    -webkit-transform: translateZ(0) !important;
+    will-change: transform !important;
+    contain: paint !important;
+    background-color: #0b1315 !important;
   }
 
   /* Photo Cards in Swiper: 270px width x 210px height */
@@ -309,6 +323,11 @@
     width: 270px !important;
     height: 210px !important;
     border-radius: 10px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+    transform: translateZ(0) !important;
+    -webkit-transform: translateZ(0) !important;
+    will-change: transform !important;
+    contain: paint !important;
   }
 
   #facilities .swiper-slide img,
@@ -317,6 +336,10 @@
     height: 100% !important;
     object-fit: cover !important;
     border-radius: 10px !important;
+    transform: translateZ(0) !important;
+    -webkit-transform: translateZ(0) !important;
+    backface-visibility: hidden !important;
+    -webkit-backface-visibility: hidden !important;
   }
 
   /* Bottom 4 Feature Cards (Cricket Practice, Team, Swimming, ₹100) */
