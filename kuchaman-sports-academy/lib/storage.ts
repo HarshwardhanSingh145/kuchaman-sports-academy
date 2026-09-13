@@ -27,6 +27,7 @@ import {
   DEFAULT_OWNER_SIGNATURE,
   DEFAULT_ACADEMY_SEAL,
   DEFAULT_SIGNATURE_CONFIG,
+  DEFAULT_BIG_BOX_PRICING,
   INITIAL_MENTORS,
   INITIAL_STUDENTS,
   INITIAL_CERTIFICATES,
@@ -248,9 +249,15 @@ function loadFromFile() {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.nets) {
-        runtimeData = { ...runtimeData, ...parsed };
+      if (raw && raw.trim()) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.nets) {
+            runtimeData = { ...runtimeData, ...parsed };
+          }
+        } catch {
+          // Ignore parse errors on corrupt cache
+        }
       }
     }
     // Ensure student management collections are initialized
@@ -271,6 +278,13 @@ function loadFromFile() {
     }
     if (!runtimeData.auditLogs || runtimeData.auditLogs.length === 0) {
       runtimeData.auditLogs = INITIAL_AUDIT_LOGS;
+    }
+
+    if (!runtimeData.config || !runtimeData.config.bigBoxPricing || runtimeData.config.bigBoxPricing.length === 0) {
+      runtimeData.config = {
+        ...(runtimeData.config || DEFAULT_CONFIG),
+        bigBoxPricing: DEFAULT_BIG_BOX_PRICING,
+      };
     }
 
     // Ensure the 5 nets match the 4 practice nets (fee ₹100, max 4) + 1 Cricket/football/Hockey big box turf (fee ₹100, no limit)
@@ -529,7 +543,11 @@ export class StorageService {
     if (sport === 'cricket') {
       const slots = this.getCricketSlotsForDate(date);
       const targetSlot = slots.find(
-        (s) => s.netId === resourceId && s.timeRange === timeRange
+        (s) =>
+          s.netId === resourceId &&
+          (s.timeRange === timeRange ||
+            timeRange.startsWith(s.timeRange) ||
+            s.timeRange.startsWith(timeRange.split(' (')[0]))
       );
 
       if (!targetSlot) {

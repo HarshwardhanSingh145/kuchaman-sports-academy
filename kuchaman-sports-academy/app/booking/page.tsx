@@ -15,12 +15,12 @@ import { FirebaseProvider } from '@/lib/FirebaseContext';
 
 export default function HomePage() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
-  // Multi-view: 'home' | 'cricket' | 'swimming' | 'admission' | 'mentor'
-  const [activeView, setActiveView] = useState<'home' | 'cricket' | 'swimming' | 'admission' | 'mentor'>('home');
+  // Multi-view: 'home' | 'cricket' | 'bigbox' | 'swimming' | 'admission' | 'mentor'
+  const [activeView, setActiveView] = useState<'home' | 'cricket' | 'bigbox' | 'swimming' | 'admission' | 'mentor'>('home');
   const [bookingKey, setBookingKey] = useState(0);
   const [mentorCredentials, setMentorCredentials] = useState<{ username: string; pass: string } | null>(null);
 
-  const handleSelectSport = (sport: 'cricket' | 'swimming') => {
+  const handleSelectSport = (sport: 'cricket' | 'bigbox' | 'swimming') => {
     setActiveView(sport);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -43,8 +43,8 @@ export default function HomePage() {
       const params = new URLSearchParams(window.location.search);
       const sportParam = params.get('sport');
       const viewParam = params.get('view');
-      if (sportParam === 'cricket' || sportParam === 'swimming') {
-        setActiveView(sportParam);
+      if (sportParam === 'cricket' || sportParam === 'bigbox' || sportParam === 'swimming') {
+        setActiveView(sportParam as any);
       } else if (viewParam === 'admission') {
         setActiveView('admission');
       } else if (viewParam === 'mentor') {
@@ -94,7 +94,7 @@ export default function HomePage() {
                 >
                   <HeroSection
                     onBookCricket={() => handleSelectSport('cricket')}
-                    onBookBigBox={() => handleSelectSport('cricket')}
+                    onBookBigBox={() => handleSelectSport('bigbox')}
                     onBookSwimming={() => handleSelectSport('swimming')}
                     onOpenAdmission={handleOpenAdmission}
                     onOpenMentor={() => handleOpenMentor()}
@@ -137,8 +137,8 @@ export default function HomePage() {
                 </motion.div>
               )}
 
-              {/* VIEW 4: Dedicated Sport Booking (Cricket or Swimming) */}
-              {(activeView === 'cricket' || activeView === 'swimming') && (
+              {/* VIEW 4: Dedicated Sport Booking (Big Box, Cricket Practice, or Swimming) */}
+              {(activeView === 'cricket' || activeView === 'bigbox' || activeView === 'swimming') && (
                 <motion.div
                   key={`booking-${activeView}`}
                   initial={{ opacity: 0, y: 30, scale: 0.99 }}

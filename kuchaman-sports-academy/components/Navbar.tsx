@@ -9,7 +9,7 @@ interface NavbarProps {
   onOpenAdmission?: () => void;
   onOpenMentor?: () => void;
   onGoHome?: () => void;
-  activeView?: 'home' | 'cricket' | 'swimming' | 'admission' | 'mentor';
+  activeView?: 'home' | 'cricket' | 'bigbox' | 'swimming' | 'admission' | 'mentor';
 }
 
 export function Navbar({

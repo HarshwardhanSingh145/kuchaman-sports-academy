@@ -1,5 +1,6 @@
 import {
   AcademyConfig,
+  BigBoxPricingTier,
   Booking,
   CricketNet,
   CricketSlot,
@@ -157,6 +158,12 @@ export const SWIMMING_TIME_SLOTS: Array<{
   },
 ];
 
+export const DEFAULT_BIG_BOX_PRICING: BigBoxPricingTier[] = [
+  { id: 'tier-1', hours: 1, label: '1 Hour', price: 1000 },
+  { id: 'tier-2', hours: 2, label: '2 Hours', price: 1800 },
+  { id: 'tier-3', hours: 3, label: '3 Hours', price: 2500 },
+];
+
 export const DEFAULT_CONFIG: AcademyConfig = {
   name: 'Kuchaman Sports Academy',
   shortName: 'KSA',
@@ -166,6 +173,7 @@ export const DEFAULT_CONFIG: AcademyConfig = {
   email: 'info@kuchamansports.in',
   operatingHours: '05:30 AM – 10:00 PM (Monday – Sunday)',
   disabledDates: [],
+  bigBoxPricing: DEFAULT_BIG_BOX_PRICING,
 };
 
 export const DEFAULT_OWNER_SIGNATURE = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 90" width="300" height="90"><path d="M25,55 C45,20 60,65 75,35 C90,15 100,50 115,40 C130,30 145,55 160,35 C175,25 200,60 220,40 C240,25 260,50 280,35 M50,65 L270,55" fill="none" stroke="%231a365d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><text x="45" y="80" font-family="'Brush Script MT', cursive, sans-serif" font-size="16" fill="%231a365d">Jay Prakash Bhakar</text></svg>`;

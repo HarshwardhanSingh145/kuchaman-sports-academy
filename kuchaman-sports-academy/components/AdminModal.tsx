@@ -30,8 +30,10 @@ import {
   Copy,
   Image as ImageIcon,
   GraduationCap,
+  Sparkles,
 } from 'lucide-react';
-import { CricketNet, CricketSlot, SwimmingSession, Booking, AcademyConfig } from '@/lib/types';
+import { CricketNet, CricketSlot, SwimmingSession, Booking, AcademyConfig, BigBoxPricingTier } from '@/lib/types';
+import { DEFAULT_BIG_BOX_PRICING } from '@/lib/defaults';
 import { useFirebase } from '@/lib/FirebaseContext';
 import { compressImageFile } from '@/lib/utils';
 import { AdminStudentManagementTab } from './AdminStudentManagementTab';
@@ -50,10 +52,14 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
-  // Active Tab: 'student_management' | 'cricket_nets' | 'cricket_slots' | 'swimming_sessions' | 'bookings' | 'payments' | 'payment_setup'
+  // Active Tab: 'student_management' | 'cricket_nets' | 'big_box_pricing' | 'cricket_slots' | 'swimming_sessions' | 'bookings' | 'payments' | 'payment_setup'
   const [activeTab, setActiveTab] = useState<
-    'student_management' | 'cricket_nets' | 'cricket_slots' | 'swimming_sessions' | 'bookings' | 'payments' | 'payment_setup'
+    'student_management' | 'cricket_nets' | 'big_box_pricing' | 'cricket_slots' | 'swimming_sessions' | 'bookings' | 'payments' | 'payment_setup'
   >('student_management');
+
+  // Big Box Duration & Pricing State (Admin Controlled)
+  const [bigBoxPricing, setBigBoxPricing] = useState<BigBoxPricingTier[]>(DEFAULT_BIG_BOX_PRICING);
+  const [savingBigBoxPricing, setSavingBigBoxPricing] = useState(false);
 
   // Config & Payment Settings State
   const [upiQrCodeUrl, setUpiQrCodeUrl] = useState('');
@@ -159,6 +165,9 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
         setUpiAccountName(configData.config.upiAccountName || 'Kuchaman Sports Academy');
         setBankName(configData.config.bankName || 'State Bank of India');
         setPaymentNotes(configData.config.paymentNotes || 'Please upload payment proof screenshot after UPI payment.');
+        if (configData.config.bigBoxPricing && Array.isArray(configData.config.bigBoxPricing) && configData.config.bigBoxPricing.length > 0) {
+          setBigBoxPricing(configData.config.bigBoxPricing);
+        }
       }
     } catch (err) {
       console.error('Error loading admin data', err);
@@ -166,6 +175,57 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
       setLoading(false);
     }
   }, [adminDate]);
+
+  // Save Big Box Duration & Pricing Settings (Admin Controlled)
+  const handleSaveBigBoxPricing = async () => {
+    try {
+      setSavingBigBoxPricing(true);
+      const res = await fetch('/api/admin/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bigBoxPricing,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setActionMessage('Big Box pricing and duration rules updated successfully!');
+        if (onDataChanged) onDataChanged();
+      } else {
+        setActionMessage(data.error || 'Failed to save Big Box pricing');
+      }
+    } catch (err) {
+      console.error('Error saving Big Box pricing', err);
+      setActionMessage('Network error saving Big Box pricing');
+    } finally {
+      setSavingBigBoxPricing(false);
+    }
+  };
+
+  const handleAddBigBoxTier = () => {
+    const nextHours = bigBoxPricing.length > 0 ? Math.max(...bigBoxPricing.map((t) => t.hours)) + 1 : 1;
+    const newTier: BigBoxPricingTier = {
+      id: `tier-${Date.now()}`,
+      hours: nextHours,
+      label: `${nextHours} Hours`,
+      price: nextHours * 900,
+    };
+    setBigBoxPricing([...bigBoxPricing, newTier]);
+  };
+
+  const handleUpdateBigBoxTier = (id: string, field: 'hours' | 'label' | 'price', value: any) => {
+    setBigBoxPricing((prev) =>
+      prev.map((tier) => (tier.id === id ? { ...tier, [field]: value } : tier))
+    );
+  };
+
+  const handleDeleteBigBoxTier = (id: string) => {
+    if (bigBoxPricing.length <= 1) {
+      alert('At least one pricing tier must remain configured.');
+      return;
+    }
+    setBigBoxPricing((prev) => prev.filter((tier) => tier.id !== id));
+  };
 
   // Save Academy QR / Payment Settings
   const handleSaveConfig = async (e: React.FormEvent) => {
@@ -610,6 +670,18 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
                   <span>Nets ({nets.length})</span>
                 </button>
                 <button
+                  id="admin-tab-big-box-pricing"
+                  onClick={() => setActiveTab('big_box_pricing')}
+                  className={`px-3 sm:px-4 py-2 text-xs font-agbalumo tracking-wide uppercase transition-all cursor-pointer border rounded-lg whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 ${
+                    activeTab === 'big_box_pricing'
+                      ? 'bg-amber-100 border-amber-600/60 text-amber-900 font-bold shadow-xs'
+                      : 'bg-white/40 border-transparent text-[#7A5C4A] hover:text-[#2C1A0E] hover:bg-white/80'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Big Box Pricing</span>
+                </button>
+                <button
                   onClick={() => setActiveTab('cricket_slots')}
                   className={`px-3 sm:px-4 py-2 text-xs font-agbalumo tracking-wide uppercase transition-all cursor-pointer border rounded-lg whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 ${
                     activeTab === 'cricket_slots'
@@ -898,6 +970,145 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Big Box Pricing & Duration Control */}
+            {activeTab === 'big_box_pricing' && (
+              <div className="p-3 sm:p-6 overflow-y-auto flex-1 space-y-5 font-agbalumo">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-neutral-200">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-amber-600" />
+                      <h4 className="text-lg sm:text-xl font-agbalumo text-[#2C1A0E] uppercase">
+                        Big Box Turf Pricing & Duration Control
+                      </h4>
+                    </div>
+                    <p className="text-xs text-[#5C4033] mt-1">
+                      Configure duration options (1 Hour, 2 Hours, etc.) and total booking rates. Big Box is charged as a whole per booking, not per player.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAddBigBoxTier}
+                      className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4 text-amber-700" />
+                      <span>Add Duration Tier</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={savingBigBoxPricing}
+                      onClick={handleSaveBigBoxPricing}
+                      className="px-4 py-2 bg-[#2C1A0E] hover:bg-[#8C5A32] text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                    >
+                      {savingBigBoxPricing ? (
+                        <span>Saving...</span>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4 text-emerald-400" />
+                          <span>Save Big Box Pricing</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Important Rule Banner */}
+                <div className="p-4 rounded-xl bg-gradient-to-r from-amber-50 via-orange-50 to-white border border-amber-200 text-xs text-amber-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                    <span>Fixed Total Booking Rule (Not Per-Player)</span>
+                  </div>
+                  <p className="text-neutral-600">
+                    Customers booking Big Box will pay the exact price configured below for the chosen duration, regardless of whether 2, 8, or 15 players join.
+                  </p>
+                </div>
+
+                {/* Duration & Pricing Tiers List */}
+                <div className="space-y-3">
+                  {bigBoxPricing.map((tier, index) => (
+                    <div
+                      key={tier.id}
+                      className="p-4 rounded-xl border border-neutral-200 bg-white shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-7 h-7 rounded-full bg-amber-100 text-amber-900 font-bold flex items-center justify-center text-xs">
+                          {index + 1}
+                        </span>
+                        <div>
+                          <span className="text-xs text-neutral-500 font-medium uppercase tracking-wider">Duration</span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <input
+                              type="number"
+                              min={1}
+                              max={12}
+                              value={tier.hours}
+                              onChange={(e) =>
+                                handleUpdateBigBoxTier(tier.id, 'hours', Math.max(1, parseInt(e.target.value) || 1))
+                              }
+                              className="w-16 px-2 py-1 text-sm font-bold border border-neutral-300 rounded-lg text-center"
+                            />
+                            <span className="text-sm font-semibold text-neutral-700">Hour(s)</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex-1 max-w-xs">
+                        <span className="text-xs text-neutral-500 font-medium uppercase tracking-wider">Display Label</span>
+                        <input
+                          type="text"
+                          value={tier.label}
+                          onChange={(e) => handleUpdateBigBoxTier(tier.id, 'label', e.target.value)}
+                          placeholder="e.g. 1 Hour"
+                          className="w-full mt-0.5 px-3 py-1.5 text-sm font-semibold border border-neutral-300 rounded-lg text-[#2C1A0E]"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="text-xs text-neutral-500 font-medium uppercase tracking-wider">Total Price (₹)</span>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-sm font-bold text-[#8C5A32]">₹</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={50}
+                            value={tier.price}
+                            onChange={(e) =>
+                              handleUpdateBigBoxTier(tier.id, 'price', Math.max(0, parseInt(e.target.value) || 0))
+                            }
+                            className="w-28 px-3 py-1.5 text-sm font-bold border border-amber-300 bg-amber-50/50 rounded-lg text-[#2C1A0E]"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBigBoxTier(tier.id)}
+                          className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          title="Delete duration tier"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="button"
+                    disabled={savingBigBoxPricing}
+                    onClick={handleSaveBigBoxPricing}
+                    className="px-5 py-2.5 bg-[#2C1A0E] hover:bg-[#8C5A32] text-white text-xs font-bold rounded-xl flex items-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+                  >
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>{savingBigBoxPricing ? 'Saving Changes...' : 'Save Big Box Pricing'}</span>
+                  </button>
                 </div>
               </div>
             )}

@@ -14,7 +14,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { upiQrCodeUrl, upiId, upiAccountName, bankName, paymentInstructions, phone, email } = body;
+    const { upiQrCodeUrl, upiId, upiAccountName, bankName, paymentInstructions, phone, email, bigBoxPricing } = body;
 
     const updatedConfig = StorageService.updateConfig({
       ...(upiQrCodeUrl !== undefined ? { upiQrCodeUrl } : {}),
@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
       ...(paymentInstructions !== undefined ? { paymentInstructions } : {}),
       ...(phone ? { phone } : {}),
       ...(email ? { email } : {}),
+      ...(bigBoxPricing !== undefined ? { bigBoxPricing } : {}),
     });
 
     saveFirestoreConfig(updatedConfig).catch((err) => {

@@ -174,11 +174,11 @@ export function HeroSection({
               </div>
 
               <div className="flex flex-wrap gap-1.5 text-xs font-semibold text-neutral-600">
-                <span className="px-2 py-0.5 bg-[#8C5A32]/10 text-[#8C5A32] font-bold rounded-md">
-                  {isHindi ? '₹100 / घंटा' : '₹100 / hr'}
+                <span className="px-2 py-0.5 bg-amber-100 text-amber-900 font-bold rounded-md">
+                  {isHindi ? 'पूरा टर्फ़ बुकिंग' : 'Flat Arena Booking'}
                 </span>
                 <span className="px-2 py-0.5 bg-neutral-100 rounded-md">
-                  {isHindi ? 'कोई सीमा नहीं' : 'No Limit'}
+                  {isHindi ? 'असीमित खिलाड़ी' : 'No Player Limit'}
                 </span>
               </div>
             </div>

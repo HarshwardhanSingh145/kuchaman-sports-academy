@@ -71,6 +71,13 @@ export interface Booking {
   verifiedBy?: string;
 }
 
+export interface BigBoxPricingTier {
+  id: string;
+  hours: number;
+  label: string;
+  price: number;
+}
+
 export interface AcademyConfig {
   name: string;
   shortName: string;
@@ -86,6 +93,8 @@ export interface AcademyConfig {
   upiAccountName?: string; // e.g. Kuchaman Sports Academy
   bankName?: string;
   paymentInstructions?: string;
+  // Big Box Pricing Configuration (Controlled by Admin)
+  bigBoxPricing?: BigBoxPricingTier[];
 }
 
 // ----------------------------------------------------
