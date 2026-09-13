@@ -1,0 +1,30 @@
+# Node & Next.js builds
+node_modules/
+.next/
+*/node_modules/
+*/.next/
+out/
+*/out/
+
+# Environment files
+.env
+.env*.local
+
+# System & Editor
+.DS_Store
+Thumbs.db
+*.log
+
+# Scraper & Temporary Assets
+scratch/
+test_*.png
+preview_*.png
+hero.png
+hero_cards.png
+section1_cards.png
+consent.cookiebot.com/
+consentcdn.cookiebot.com/
+fonts.googleapis.com/
+fonts.gstatic.com/
+html.aqlova.com/
+public-assets.envato-static.com/

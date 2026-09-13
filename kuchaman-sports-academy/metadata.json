@@ -1,0 +1,8 @@
+{
+  "name": "Kuchaman Sports Academy",
+  "description": "Premium Sports Academy in Kuchaman City featuring astro turf cricket nets and semi-Olympic swimming pool with instant online slot booking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

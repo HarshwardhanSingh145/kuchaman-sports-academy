@@ -1,0 +1,43 @@
+'use client';
+
+import React from 'react';
+import { Lock, Shield } from 'lucide-react';
+import { useLanguage } from '@/lib/LanguageContext';
+
+interface FooterProps {
+  onOpenAdmin: () => void;
+}
+
+export function Footer({ onOpenAdmin }: FooterProps) {
+  const { isHindi } = useLanguage();
+  const currentYear = new Date().getFullYear();
+
+  return (
+    <footer className="relative w-full bg-neutral-100 text-[#2C1A0E] border-t border-neutral-200 py-6 sm:py-8">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#7A5C4A]">
+        {/* Brand Copyright */}
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-[#2C1A0E] text-white flex items-center justify-center font-bold text-[10px] rounded-md">
+            KSA
+          </div>
+          <span>
+            &copy; {currentYear} {isHindi ? 'कुचामन स्पोर्ट्स एकेडमी (KSA)' : 'Kuchaman Sports Academy (KSA)'}. {isHindi ? 'सर्वाधिकार सुरक्षित।' : 'All rights reserved.'}
+          </span>
+        </div>
+
+        {/* Admin Login Button */}
+        <div className="flex items-center gap-3">
+          <button
+            id="footer-admin-link"
+            type="button"
+            onClick={onOpenAdmin}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-neutral-200 border border-neutral-200 text-xs font-semibold text-[#2C1A0E] transition-colors cursor-pointer shadow-2xs"
+          >
+            <Shield className="w-3.5 h-3.5 text-[#8C5A32]" />
+            <span>{isHindi ? 'एडमिन पैनल' : 'Admin Panel'}</span>
+          </button>
+        </div>
+      </div>
+    </footer>
+  );
+}

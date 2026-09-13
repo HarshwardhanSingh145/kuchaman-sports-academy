@@ -1,0 +1,203 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'ishvarkalwa001@gmail.com' &&
+        request.auth.token.email_verified == true
+      );
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validation Helpers
+    function isValidCricketNet(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.code is string && data.code.size() <= 32 &&
+             data.turfType is string && data.turfType.size() <= 64 &&
+             data.capacityPerSlot is number && data.capacityPerSlot >= 1 && data.capacityPerSlot <= 100 &&
+             data.isActive is bool &&
+             data.order is number;
+    }
+
+    function isValidBooking(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             (data.sport == 'cricket' || data.sport == 'swimming') &&
+             data.resourceId is string && data.resourceId.size() <= 128 &&
+             data.resourceName is string && data.resourceName.size() <= 128 &&
+             data.date is string && data.date.size() <= 16 &&
+             data.timeRange is string && data.timeRange.size() <= 64 &&
+             data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 128 &&
+             data.userPhone is string && data.userPhone.size() >= 6 && data.userPhone.size() <= 32 &&
+             data.playerCount is number && data.playerCount >= 1 && data.playerCount <= 100 &&
+             (data.status == 'CONFIRMED' || data.status == 'COMPLETED' || data.status == 'CANCELLED') &&
+             data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidCustomSlot(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             (data.sport == 'cricket' || data.sport == 'swimming') &&
+             data.slotKey is string && data.slotKey.size() <= 128 &&
+             (data.status == 'AVAILABLE' || data.status == 'LIMITED' || data.status == 'FULL' || data.status == 'CLOSED');
+    }
+
+    function isValidAcademyConfig(data) {
+      return data.name is string && data.name.size() <= 128;
+    }
+
+    function isValidStudent(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 128 &&
+             data.fatherName is string && data.fatherName.size() <= 128 &&
+             data.contact is string && data.contact.size() <= 32 &&
+             (data.category == 'SOLO' || data.category == 'ACADEMIC' || data.category == 'SCHOOL') &&
+             data.admissionDate is string && data.admissionDate.size() <= 16 &&
+             (data.status == 'ACTIVE' || data.status == 'COMPLETED' || data.status == 'REMOVED' || data.status == 'REPLACED' || data.status == 'EXPIRED');
+    }
+
+    function isValidMentor(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.username is string && data.username.size() <= 64 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.contact is string && data.contact.size() <= 32 &&
+             data.organizationName is string && data.organizationName.size() <= 128 &&
+             (data.category == 'ACADEMIC' || data.category == 'SCHOOL') &&
+             (data.status == 'ACTIVE' || data.status == 'INACTIVE');
+    }
+
+    function isValidAttendance(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.studentId is string && data.studentId.size() <= 128 &&
+             data.date is string && data.date.size() <= 16 &&
+             (data.status == 'PRESENT' || data.status == 'ABSENT' || data.status == 'LEAVE');
+    }
+
+    function isValidCertificate(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.certificateNumber is string && data.certificateNumber.size() <= 64 &&
+             data.studentId is string && data.studentId.size() <= 128 &&
+             data.studentName is string && data.studentName.size() <= 128 &&
+             (data.status == 'NONE' || data.status == 'DRAFT' || data.status == 'PENDING_APPROVAL' || data.status == 'APPROVED' || data.status == 'REJECTED' || data.status == 'ISSUED');
+    }
+
+    function isValidSignatureConfig(data) {
+      return data.ownerName is string && data.ownerName.size() <= 128 &&
+             data.ownerTitle is string && data.ownerTitle.size() <= 128;
+    }
+
+    function isValidAuditLog(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.action is string && data.action.size() <= 128 &&
+             data.timestamp is string && data.timestamp.size() <= 64 &&
+             data.performedBy is string && data.performedBy.size() <= 128;
+    }
+
+    // Cricket Nets Collection
+    match /cricket_nets/{netId} {
+      allow read: if true;
+      allow create, update: if isValidId(netId) && isValidCricketNet(incoming());
+      allow delete: if isValidId(netId) && (isAdmin() || isSignedIn());
+    }
+
+    // Bookings Collection
+    match /bookings/{bookingId} {
+      allow read: if true;
+      allow create: if isValidId(bookingId) && isValidBooking(incoming());
+      allow update: if isValidId(bookingId) && isValidBooking(incoming());
+      allow delete: if isValidId(bookingId) && (isAdmin() || isSignedIn());
+    }
+
+    // Custom Slots Overrides Collection
+    match /custom_slots/{slotId} {
+      allow read: if true;
+      allow create, update: if isValidId(slotId) && isValidCustomSlot(incoming());
+      allow delete: if isValidId(slotId) && (isAdmin() || isSignedIn());
+    }
+
+    // Academy Configuration
+    match /academy_config/{configId} {
+      allow read: if true;
+      allow create, update: if isValidId(configId) && isValidAcademyConfig(incoming());
+      allow delete: if isValidId(configId) && (isAdmin() || isSignedIn());
+    }
+
+    // Admins Collection
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update, delete: if isBootstrappedAdmin() && isValidId(adminId);
+    }
+
+    // Students Collection
+    match /students/{studentId} {
+      allow read: if true;
+      allow create, update: if isValidId(studentId) && isValidStudent(incoming());
+      allow delete: if isValidId(studentId) && (isAdmin() || isSignedIn());
+    }
+
+    // Mentors Collection
+    match /mentors/{mentorId} {
+      allow read: if true;
+      allow create, update: if isValidId(mentorId) && isValidMentor(incoming());
+      allow delete: if isValidId(mentorId) && (isAdmin() || isSignedIn());
+    }
+
+    // Attendance Collection
+    match /attendance/{attendanceId} {
+      allow read: if true;
+      allow create, update: if isValidId(attendanceId) && isValidAttendance(incoming());
+      allow delete: if isValidId(attendanceId) && (isAdmin() || isSignedIn());
+    }
+
+    // Certificates Collection
+    match /certificates/{certificateId} {
+      allow read: if true;
+      allow create, update: if isValidId(certificateId) && isValidCertificate(incoming());
+      allow delete: if isValidId(certificateId) && (isAdmin() || isSignedIn());
+    }
+
+    // Signatures Collection
+    match /signatures/{signatureId} {
+      allow read: if true;
+      allow create, update: if isValidId(signatureId) && isValidSignatureConfig(incoming());
+      allow delete: if isValidId(signatureId) && (isAdmin() || isSignedIn());
+    }
+
+    // Audit Logs Collection (Immutable)
+    match /audit_logs/{logId} {
+      allow read: if true;
+      allow create: if isValidId(logId) && isValidAuditLog(incoming());
+      allow update, delete: if false; // Strict immutability
+    }
+  }
+}
+

@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-agbalumo: 'Agbalumo', cursive, system-ui, sans-serif;
+    --font-jakarta: 'Plus Jakarta Sans', sans-serif;
+    --font-kalam: 'Kalam', cursive, sans-serif;
+  }
+
+  body {
+    font-family: 'Agbalumo', 'Plus Jakarta Sans', sans-serif;
+  }
+}
+
+.font-agbalumo {
+  font-family: 'Agbalumo', cursive, system-ui, sans-serif;
+}
+
+.font-serif-title {
+  font-family: 'Agbalumo', cursive, system-ui, sans-serif;
+}
+
+.font-cinzel {
+  font-family: 'Agbalumo', cursive, system-ui, sans-serif;
+}
+
+.font-editorial {
+  font-family: 'Agbalumo', cursive, system-ui, sans-serif;
+}
+
+.font-sans-body {
+  font-family: 'Agbalumo', 'Plus Jakarta Sans', sans-serif;
+}
+
+.font-handwritten {
+  font-family: 'Kalam', cursive, sans-serif;
+}
+
+.font-hindi-heading {
+  font-family: 'Rozha One', 'Tiro Devanagari Hindi', 'Kalam', serif;
+}
+
+/* Custom scrollbar in mocha & cream */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #241711;
+}
+::-webkit-scrollbar-thumb {
+  background: #54392B;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B88452;
+}
+
+/* Film grain effect */
+.film-grain {
+  background-image: radial-gradient(rgba(184, 132, 82, 0.06) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+/* Diagonal luxury cut */
+.diagonal-accent {
+  background: linear-gradient(135deg, rgba(184, 132, 82, 0.12) 0%, transparent 60%);
+}
+
+/* Certificate Print Optimization */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  header, footer, nav, .print\:hidden {
+    display: none !important;
+  }
+  #certificate-modal-backdrop {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+  }
+  #ksa-certificate-canvas {
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: auto !important;
+    width: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+
