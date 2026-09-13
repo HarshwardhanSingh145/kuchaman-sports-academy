@@ -11,11 +11,28 @@
   // 01. tp-text-slide-active
 
   function playAllVideos() {
-    document.querySelectorAll('.swiper-container video').forEach(function (v) {
+    document.querySelectorAll('video').forEach(function (v) {
       v.muted = true;
-      var p = v.play();
-      if (p !== undefined) {
-        p.catch(function () {});
+      v.defaultMuted = true;
+      v.playsInline = true;
+      if (!v.hasAttribute('muted')) v.setAttribute('muted', '');
+      if (!v.hasAttribute('playsinline')) v.setAttribute('playsinline', '');
+      if (!v.hasAttribute('webkit-playsinline')) v.setAttribute('webkit-playsinline', '');
+      
+      if (!v._loopAttached) {
+        v._loopAttached = true;
+        v.addEventListener('ended', function () {
+          v.currentTime = 0;
+          var retryPlay = v.play();
+          if (retryPlay && typeof retryPlay.catch === 'function') retryPlay.catch(function () {});
+        });
+      }
+
+      if (v.paused) {
+        var p = v.play();
+        if (p !== undefined && typeof p.catch === 'function') {
+          p.catch(function () {});
+        }
       }
     });
   }
@@ -31,7 +48,7 @@
     loopedSlides: 12,
     autoplay: {
       delay: 1,
-      disableOnInteraction: true,
+      disableOnInteraction: false,
     },
     on: {
       init: function () {
@@ -40,11 +57,22 @@
       slideChange: function () {
         playAllVideos();
       },
+      touchEnd: function () {
+        playAllVideos();
+      },
+      transitionEnd: function () {
+        playAllVideos();
+      },
     },
   });
 
   $(window).on("load", playAllVideos);
   document.addEventListener("DOMContentLoaded", playAllVideos);
-  document.addEventListener("click", playAllVideos, { once: true });
-  document.addEventListener("touchstart", playAllVideos, { once: true });
+  document.addEventListener("click", playAllVideos);
+  document.addEventListener("touchstart", playAllVideos, { passive: true });
+  window.addEventListener("scroll", playAllVideos, { passive: true });
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) playAllVideos();
+  });
+  setInterval(playAllVideos, 3000);
 })(jQuery);
