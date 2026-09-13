@@ -1,0 +1,62 @@
+/* ==========================================================================
+   KSA High-End Typography & Scroll Animation System
+   GPU-Accelerated, Accessible, Lightweight (Transforms & Opacity only)
+   ========================================================================== */
+
+/* Word mask container to hide incoming slide-up text */
+.ksa-split-word-mask {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+  line-height: inherit;
+  padding-top: 0.04em;
+  padding-bottom: 0.16em;
+  margin-top: -0.04em;
+  margin-bottom: -0.16em;
+}
+
+/* Inner animated word token - initial state handled via GSAP fromTo */
+.ksa-split-word {
+  display: inline-block;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Smooth fade-up for paragraphs and secondary text */
+.ksa-text-fade-up {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Elegant scale-pop for badges, pills and tags */
+.ksa-badge-reveal {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Subtle stagger reveal for cards and grid items */
+.ksa-card-reveal {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Zero layout disruption on inline markup */
+.ksa-split-word-mask br {
+  display: none;
+}
+
+/* Accessibility: Full support for prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .ksa-split-word,
+  .ksa-text-fade-up,
+  .ksa-badge-reveal,
+  .ksa-card-reveal {
+    transform: none !important;
+    opacity: 1 !important;
+    transition: none !important;
+    will-change: auto !important;
+  }
+  .ksa-split-word-mask {
+    overflow: visible !important;
+  }
+}

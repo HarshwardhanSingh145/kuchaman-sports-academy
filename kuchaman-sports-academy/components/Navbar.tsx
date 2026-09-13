@@ -70,12 +70,6 @@ export function Navbar({
 
           <a
             href="/"
-            onClick={(e) => {
-              if (window.location.port === '3000') {
-                e.preventDefault();
-                window.location.href = 'http://localhost:8080/index.html';
-              }
-            }}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-xs font-semibold text-[#2C1A0E] transition-colors"
             title="Return to Main Website"
           >
