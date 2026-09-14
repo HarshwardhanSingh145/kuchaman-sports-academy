@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     const bookingInput: any = {
+      ...(body.id ? { id: String(body.id) } : {}),
       sport,
       category: category || sport,
       resourceId,
@@ -114,8 +115,12 @@ export async function GET(req: NextRequest) {
       const firestoreBookings = await getFirestoreBookings({
         phone: phone || undefined,
       });
-      if (firestoreBookings && firestoreBookings.length > 0) {
-        StorageService.mergeBookings(firestoreBookings);
+      if (Array.isArray(firestoreBookings)) {
+        if (!phone && !id) {
+          StorageService.setBookings(firestoreBookings);
+        } else if (firestoreBookings.length > 0) {
+          StorageService.mergeBookings(firestoreBookings);
+        }
       }
     } catch (fsErr) {
       console.warn('Notice syncing bookings from Firestore:', fsErr);

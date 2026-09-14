@@ -155,7 +155,7 @@ export async function syncAllFromFirestore(): Promise<void> {
     if (sig && sig.ownerName) {
       runtimeData.signatureConfig = sig;
     }
-    if (bookings && bookings.length > 0) {
+    if (Array.isArray(bookings)) {
       runtimeData.bookings = bookings;
     }
     if (logs && logs.length > 0) {
@@ -200,39 +200,7 @@ let runtimeData: StoredData = {
   nets: DEFAULT_NETS,
   customCricketSlots: {},
   customSwimmingSessions: {},
-  bookings: [
-    {
-      id: 'KSA-CRK-1082',
-      sport: 'cricket',
-      resourceId: 'net-1',
-      resourceName: 'Net 01 — Match Turf',
-      date: new Date().toISOString().split('T')[0],
-      timeRange: '06:00 AM – 07:00 AM',
-      userName: 'Vikram Shekhawat',
-      userPhone: '+91 94140 12890',
-      userEmail: 'vikram.s@gmail.com',
-      playerCount: 2,
-      experienceLevel: 'Intermediate',
-      notes: 'Pace bowling practice with match ball',
-      status: 'CONFIRMED',
-      createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-    },
-    {
-      id: 'KSA-SWM-4921',
-      sport: 'swimming',
-      resourceId: 'swm-0700',
-      resourceName: 'Olympic Facility — Precision Stroke',
-      date: new Date().toISOString().split('T')[0],
-      timeRange: '07:00 AM – 08:00 AM',
-      userName: 'Aaditya Sharma',
-      userPhone: '+91 98281 77209',
-      playerCount: 1,
-      experienceLevel: 'Advanced',
-      notes: 'Freestyle speed endurance drills',
-      status: 'CONFIRMED',
-      createdAt: new Date(Date.now() - 3600000 * 8).toISOString(),
-    },
-  ],
+  bookings: [],
   config: DEFAULT_CONFIG,
   students: INITIAL_STUDENTS,
   mentors: INITIAL_MENTORS,
@@ -576,6 +544,11 @@ export class StorageService {
     );
   }
 
+  static setBookings(bookings: Booking[]): void {
+    runtimeData.bookings = Array.isArray(bookings) ? [...bookings] : [];
+    saveToFile();
+  }
+
   static mergeBookings(incoming: Booking[]): void {
     if (!incoming || incoming.length === 0) return;
     const map = new Map<string, Booking>();
@@ -606,6 +579,7 @@ export class StorageService {
   }
 
   static createBooking(bookingData: {
+    id?: string;
     sport: 'cricket' | 'swimming' | 'admission';
     category?: string;
     resourceId: string;
@@ -674,7 +648,7 @@ export class StorageService {
 
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     const prefix = sport === 'cricket' ? 'KSA-CRK' : sport === 'swimming' ? 'KSA-SWM' : 'KSA-ADM';
-    const bookingId = `${prefix}-${randomNum}`;
+    const bookingId = bookingData.id || `${prefix}-${randomNum}`;
 
     // Sanitize bookingData to remove undefined properties
     const cleanBookingData: Record<string, any> = {};

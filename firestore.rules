@@ -21,7 +21,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128;
     }
 
     function isBootstrappedAdmin() {
@@ -133,7 +133,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isValidId(bookingId) && isValidBooking(incoming());
       allow update: if isValidId(bookingId) && isValidBooking(incoming());
-      allow delete: if isValidId(bookingId) && (isAdmin() || isSignedIn());
+      allow delete: if isValidId(bookingId);
     }
 
     // Custom Slots Overrides Collection

@@ -15,8 +15,12 @@ export async function GET(req: NextRequest) {
 
     try {
       const firestoreBookings = await getFirestoreBookings({ sport, date });
-      if (firestoreBookings && firestoreBookings.length > 0) {
-        StorageService.mergeBookings(firestoreBookings);
+      if (Array.isArray(firestoreBookings)) {
+        if (!sport && !date && !status) {
+          StorageService.setBookings(firestoreBookings);
+        } else if (firestoreBookings.length > 0) {
+          StorageService.mergeBookings(firestoreBookings);
+        }
       }
     } catch (fsErr) {
       console.warn('Notice syncing admin bookings from Firestore:', fsErr);

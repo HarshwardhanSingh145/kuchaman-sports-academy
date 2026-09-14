@@ -29,7 +29,7 @@ import { CricketNet, CricketSlot, SwimmingSession, Booking, AcademyConfig } from
 import { useLanguage } from '@/lib/LanguageContext';
 import { DEFAULT_NETS, DEFAULT_CONFIG, CRICKET_TIME_SLOTS, SWIMMING_TIME_SLOTS } from '@/lib/defaults';
 import { BookingTimeWatch } from '@/components/BookingTimeWatch';
-import { subscribeToConfig } from '@/lib/firestore-service';
+import { subscribeToConfig, createFirestoreBooking } from '@/lib/firestore-service';
 
 export type BookingCategory = 'cricket' | 'swimming' | 'admission';
 
@@ -371,7 +371,14 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
               : 'Cricket Practice Net'
             : 'Semi-Olympic Swimming Pool';
 
-        const bookingPayload = {
+        const randomNum = Math.floor(1000 + Math.random() * 9000);
+        const prefix = category === 'cricket' ? 'KSA-CRK' : 'KSA-SWM';
+        const generatedBookingId = `${prefix}-${randomNum}`;
+        const createdAt = new Date().toISOString();
+        let finalBookingId = generatedBookingId;
+
+        const bookingPayload: Booking = {
+          id: generatedBookingId,
           sport: category,
           category: category === 'cricket' && selectedNetType === 'bigbox' ? 'cricket_bigbox' : category,
           resourceId: category === 'cricket' ? selectedNetId : 'swimming-pool',
@@ -392,20 +399,36 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
           paymentMethod: 'ONLINE',
           transactionId: transactionId.trim() || `UPI-TXN-${Date.now().toString().slice(-6)}`,
           paymentScreenshot: paymentScreenshot || undefined,
+          status: 'COMPLETED',
+          createdAt,
         };
 
+        // 1. Direct Real-Time Cloud Firestore Sync
         try {
-          await fetch('/api/bookings', {
+          await createFirestoreBooking(bookingPayload);
+        } catch (fsErr) {
+          console.warn('Direct Firestore booking creation notice:', fsErr);
+        }
+
+        // 2. Server Dual-Sync API
+        try {
+          const res = await fetch('/api/bookings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(bookingPayload),
           });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.booking?.id) {
+              finalBookingId = data.booking.id;
+            }
+          }
         } catch {
           // Local fallback allowed
         }
 
         setConfirmedBooking({
-          id: bookingId,
+          id: finalBookingId,
           category,
           title: resourceName,
           details: `${category === 'cricket' ? (isHindi ? 'खिलाड़ी' : 'Players') : (isHindi ? 'व्यक्ति' : 'Swimmers')}: ${playerCount} • ${durationHours} ${durationHours === 1 ? (isHindi ? 'घंटा' : 'Hour') : (isHindi ? 'घंटे' : 'Hours')}`,
