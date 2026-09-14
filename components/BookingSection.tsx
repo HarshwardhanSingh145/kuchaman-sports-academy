@@ -29,6 +29,7 @@ import { CricketNet, CricketSlot, SwimmingSession, Booking, AcademyConfig } from
 import { useLanguage } from '@/lib/LanguageContext';
 import { DEFAULT_NETS, DEFAULT_CONFIG, CRICKET_TIME_SLOTS, SWIMMING_TIME_SLOTS } from '@/lib/defaults';
 import { BookingTimeWatch } from '@/components/BookingTimeWatch';
+import { subscribeToConfig } from '@/lib/firestore-service';
 
 export type BookingCategory = 'cricket' | 'swimming' | 'admission';
 
@@ -111,6 +112,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
   // 2. Fetch Config & Availability
   // ---------------------------------------------------------------------------
   useEffect(() => {
+    // 1. Initial fetch from API
     fetch('/api/config')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -119,6 +121,17 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
         }
       })
       .catch(() => {});
+
+    // 2. Realtime listener for instant sync across all user devices
+    const unsubscribe = subscribeToConfig((liveConfig) => {
+      if (liveConfig) {
+        setOwnerConfig(liveConfig);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Update initial sport if prop changes

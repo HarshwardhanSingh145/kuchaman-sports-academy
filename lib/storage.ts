@@ -576,6 +576,21 @@ export class StorageService {
     );
   }
 
+  static mergeBookings(incoming: Booking[]): void {
+    if (!incoming || incoming.length === 0) return;
+    const map = new Map<string, Booking>();
+    for (const b of runtimeData.bookings) {
+      map.set(b.id, b);
+    }
+    for (const b of incoming) {
+      map.set(b.id, { ...(map.get(b.id) || {}), ...b });
+    }
+    runtimeData.bookings = Array.from(map.values()).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    saveToFile();
+  }
+
   static getBookings(filters?: { sport?: string; date?: string; status?: string }): Booking[] {
     let list = [...runtimeData.bookings];
     if (filters?.sport) {

@@ -59,9 +59,11 @@ export async function PATCH(
     if (updated.verifiedAt) paymentUpdates.verifiedAt = updated.verifiedAt;
     if (updated.verifiedBy) paymentUpdates.verifiedBy = updated.verifiedBy;
 
-    updateFirestoreBookingStatus(id, updated.status, paymentUpdates).catch((err) =>
-      console.warn('Firestore booking status update sync:', err)
-    );
+    try {
+      await updateFirestoreBookingStatus(id, updated.status, paymentUpdates);
+    } catch (err) {
+      console.warn('Firestore booking status update sync notice:', err);
+    }
 
     return NextResponse.json({
       success: true,
@@ -84,9 +86,11 @@ export async function DELETE(
     }
 
     const deleted = StorageService.deleteBooking(id);
-    deleteFirestoreBooking(id).catch((err) =>
-      console.warn('Firestore booking deletion notice:', err)
-    );
+    try {
+      await deleteFirestoreBooking(id);
+    } catch (err) {
+      console.warn('Firestore booking deletion notice:', err);
+    }
 
     return NextResponse.json({
       success: true,

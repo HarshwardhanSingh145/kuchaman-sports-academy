@@ -135,6 +135,7 @@ export interface AcademyConfig {
   upiAccountName?: string; // e.g. Kuchaman Sports Academy
   bankName?: string;
   paymentInstructions?: string;
+  paymentNotes?: string;
   // Special Event Discount Pop-up Configuration
   discountPopup?: DiscountPopupConfig;
   // Dynamic Hourly Rate Management

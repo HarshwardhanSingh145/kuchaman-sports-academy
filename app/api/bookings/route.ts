@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { StorageService } from '@/lib/storage';
-import { createFirestoreBooking } from '@/lib/firestore-service';
+import { createFirestoreBooking, getFirestoreBookings } from '@/lib/firestore-service';
 
 export async function POST(req: NextRequest) {
   try {
@@ -86,10 +86,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Persist to Firestore asynchronously
-    createFirestoreBooking(result.booking).catch((err) => {
-      console.warn('Firestore async sync notice:', err);
-    });
+    // Persist to Firestore
+    try {
+      await createFirestoreBooking(result.booking);
+    } catch (err) {
+      console.warn('Firestore booking creation notice:', err);
+    }
 
     return NextResponse.json({
       success: true,
@@ -106,6 +108,18 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const phone = searchParams.get('phone');
     const id = searchParams.get('id');
+
+    // Sync from Firestore to get real-time approvals across all devices
+    try {
+      const firestoreBookings = await getFirestoreBookings({
+        phone: phone || undefined,
+      });
+      if (firestoreBookings && firestoreBookings.length > 0) {
+        StorageService.mergeBookings(firestoreBookings);
+      }
+    } catch (fsErr) {
+      console.warn('Notice syncing bookings from Firestore:', fsErr);
+    }
 
     let bookings = StorageService.getBookings();
     if (phone) {

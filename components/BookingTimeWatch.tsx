@@ -16,6 +16,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { Booking, AcademyConfig, DateSpecificBlock } from '@/lib/types';
+import { subscribeToBookings } from '@/lib/firestore-service';
 import {
   parseTimeToContinuousMinutes,
   formatMinutesTo12Hour,
@@ -103,8 +104,19 @@ export function BookingTimeWatch({
         if (isMounted) setLoadingBookings(false);
       });
 
+    const unsubscribe = subscribeToBookings((liveBookings) => {
+      if (isMounted && Array.isArray(liveBookings)) {
+        const forDate = selectedDate
+          ? liveBookings.filter((b) => b.date === selectedDate)
+          : liveBookings;
+        setBookings(forDate);
+        setLoadingBookings(false);
+      }
+    });
+
     return () => {
       isMounted = false;
+      unsubscribe();
     };
   }, [selectedDate]);
 

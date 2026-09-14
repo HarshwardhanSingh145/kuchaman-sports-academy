@@ -41,6 +41,7 @@ import { AdminDiscountPopupTab } from './AdminDiscountPopupTab';
 import { AdminHourlyRatesTab } from './AdminHourlyRatesTab';
 import { AdminBookingTimingTab } from './AdminBookingTimingTab';
 import { AdminBookingInfoTab } from './AdminBookingInfoTab';
+import { subscribeToBookings, subscribeToConfig } from '@/lib/firestore-service';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -275,6 +276,27 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
   useEffect(() => {
     if (isEffectiveAuth) {
       loadAdminData();
+
+      const unsubBookings = subscribeToBookings((liveBookings) => {
+        if (Array.isArray(liveBookings)) {
+          setBookings(liveBookings);
+        }
+      });
+
+      const unsubConfig = subscribeToConfig((liveConfig) => {
+        if (liveConfig) {
+          setUpiQrCodeUrl((prev) => (prev ? prev : (liveConfig.upiQrCodeUrl || '')));
+          setUpiId((prev) => (prev ? prev : (liveConfig.upiId || '9829084421@paytm')));
+          setUpiAccountName((prev) => (prev ? prev : (liveConfig.upiAccountName || 'Kuchaman Sports Academy')));
+          setBankName((prev) => (prev ? prev : (liveConfig.bankName || 'State Bank of India')));
+          setPaymentNotes((prev) => (prev ? prev : (liveConfig.paymentNotes || liveConfig.paymentInstructions || 'Please upload payment proof screenshot after UPI payment.')));
+        }
+      });
+
+      return () => {
+        unsubBookings();
+        unsubConfig();
+      };
     }
   }, [isEffectiveAuth, loadAdminData]);
 

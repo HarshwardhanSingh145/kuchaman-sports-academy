@@ -188,7 +188,7 @@ export async function updateFirestoreBookingStatus(
       status,
       ...(paymentUpdates || {}),
     });
-    await updateDoc(doc(db, BOOKINGS_COLLECTION, bookingId), cleanUpdates);
+    await setDoc(doc(db, BOOKINGS_COLLECTION, bookingId), cleanUpdates, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -216,10 +216,30 @@ export async function saveFirestoreConfig(config: AcademyConfig): Promise<void> 
       ...config,
       updatedAt: new Date().toISOString(),
     });
-    await setDoc(doc(db, CONFIG_COLLECTION, 'main'), cleanConfig);
+    await setDoc(doc(db, CONFIG_COLLECTION, 'main'), cleanConfig, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
+}
+
+/**
+ * Realtime listener for academy configuration (QR, UPI, timing, rates)
+ */
+export function subscribeToConfig(
+  callback: (config: AcademyConfig) => void
+): Unsubscribe {
+  const ref = doc(db, CONFIG_COLLECTION, 'main');
+  return onSnapshot(
+    ref,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        callback({ ...DEFAULT_CONFIG, ...snapshot.data() } as AcademyConfig);
+      }
+    },
+    (error) => {
+      console.warn('Config subscription notice:', error);
+    }
+  );
 }
 
 /**

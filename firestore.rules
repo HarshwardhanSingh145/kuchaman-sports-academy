@@ -51,7 +51,7 @@ service cloud.firestore {
 
     function isValidBooking(data) {
       return data.id is string && data.id.size() <= 128 &&
-             (data.sport == 'cricket' || data.sport == 'swimming') &&
+             (data.sport == 'cricket' || data.sport == 'swimming' || data.sport == 'admission') &&
              data.resourceId is string && data.resourceId.size() <= 128 &&
              data.resourceName is string && data.resourceName.size() <= 128 &&
              data.date is string && data.date.size() <= 16 &&
@@ -59,7 +59,7 @@ service cloud.firestore {
              data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 128 &&
              data.userPhone is string && data.userPhone.size() >= 6 && data.userPhone.size() <= 32 &&
              data.playerCount is number && data.playerCount >= 1 && data.playerCount <= 100 &&
-             (data.status == 'CONFIRMED' || data.status == 'COMPLETED' || data.status == 'CANCELLED') &&
+             (data.status == 'CONFIRMED' || data.status == 'COMPLETED' || data.status == 'CANCELLED' || data.status == 'PENDING') &&
              data.createdAt is string && data.createdAt.size() <= 64;
     }
 

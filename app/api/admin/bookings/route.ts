@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { StorageService } from '@/lib/storage';
-import { updateFirestoreBookingStatus } from '@/lib/firestore-service';
+import {
+  updateFirestoreBookingStatus,
+  getFirestoreBookings,
+  deleteFirestoreBooking,
+} from '@/lib/firestore-service';
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,6 +12,15 @@ export async function GET(req: NextRequest) {
     const sport = searchParams.get('sport') || undefined;
     const date = searchParams.get('date') || undefined;
     const status = searchParams.get('status') || undefined;
+
+    try {
+      const firestoreBookings = await getFirestoreBookings({ sport, date });
+      if (firestoreBookings && firestoreBookings.length > 0) {
+        StorageService.mergeBookings(firestoreBookings);
+      }
+    } catch (fsErr) {
+      console.warn('Notice syncing admin bookings from Firestore:', fsErr);
+    }
 
     const bookings = StorageService.getBookings({ sport, date, status });
     return NextResponse.json({ success: true, bookings });
@@ -44,9 +57,11 @@ export async function POST(req: NextRequest) {
     if (updated.verifiedAt) paymentUpdates.verifiedAt = updated.verifiedAt;
     if (updated.verifiedBy) paymentUpdates.verifiedBy = updated.verifiedBy;
 
-    updateFirestoreBookingStatus(bookingId, updated.status, paymentUpdates).catch((err) =>
-      console.warn('Firestore booking status update sync:', err)
-    );
+    try {
+      await updateFirestoreBookingStatus(bookingId, updated.status, paymentUpdates);
+    } catch (err) {
+      console.warn('Firestore booking status update sync error:', err);
+    }
 
     return NextResponse.json({
       success: true,
@@ -70,6 +85,11 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Booking ID is required' }, { status: 400 });
     }
     const deleted = StorageService.deleteBooking(id);
+    try {
+      await deleteFirestoreBooking(id);
+    } catch (err) {
+      console.warn('Firestore booking delete notice:', err);
+    }
     return NextResponse.json({ success: true, deleted });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

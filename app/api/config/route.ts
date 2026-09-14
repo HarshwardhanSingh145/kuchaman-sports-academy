@@ -4,6 +4,14 @@ import { getFirestoreConfig } from '@/lib/firestore-service';
 
 export async function GET() {
   try {
+    try {
+      const firestoreConfig = await getFirestoreConfig();
+      if (firestoreConfig) {
+        StorageService.updateConfig(firestoreConfig);
+      }
+    } catch (fsErr) {
+      console.warn('Notice syncing config from Firestore:', fsErr);
+    }
     const config = StorageService.getConfig();
     return NextResponse.json({ success: true, config });
   } catch (error: any) {

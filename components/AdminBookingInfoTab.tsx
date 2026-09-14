@@ -20,6 +20,7 @@ import {
   Download,
 } from 'lucide-react';
 import { Booking } from '@/lib/types';
+import { subscribeToBookings } from '@/lib/firestore-service';
 
 interface AdminBookingInfoTabProps {
   onRefresh?: () => void;
@@ -36,6 +37,15 @@ export function AdminBookingInfoTab({ onRefresh }: AdminBookingInfoTabProps) {
 
   useEffect(() => {
     fetchBookings();
+    const unsubscribe = subscribeToBookings((liveBookings) => {
+      if (Array.isArray(liveBookings)) {
+        setBookings(liveBookings);
+        setLoading(false);
+      }
+    });
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const fetchBookings = () => {

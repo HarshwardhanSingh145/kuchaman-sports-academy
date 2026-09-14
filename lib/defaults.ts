@@ -166,6 +166,12 @@ export const DEFAULT_CONFIG: AcademyConfig = {
   email: 'info@kuchamansports.in',
   operatingHours: '06:00 AM – 02:00 AM (Monday – Sunday)',
   disabledDates: [],
+  upiId: '9829084421@paytm',
+  upiAccountName: 'Kuchaman Sports Academy',
+  bankName: 'State Bank of India',
+  paymentInstructions: 'Please upload payment proof screenshot after UPI payment.',
+  paymentNotes: 'Please upload payment proof screenshot after UPI payment.',
+  upiQrCodeUrl: '',
   hourlyRates: {
     cricketBigBox: 1000,
     cricketPracticeNet: 500,
