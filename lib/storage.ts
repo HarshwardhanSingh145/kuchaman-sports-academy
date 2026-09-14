@@ -19,6 +19,7 @@ import {
 } from './types';
 import fs from 'fs';
 import path from 'path';
+import { parseTimeRange, checkBookingConflict } from './timing-helper';
 import {
   DEFAULT_NETS,
   CRICKET_TIME_SLOTS,
@@ -272,6 +273,15 @@ function loadFromFile() {
     if (!runtimeData.auditLogs || runtimeData.auditLogs.length === 0) {
       runtimeData.auditLogs = INITIAL_AUDIT_LOGS;
     }
+    if (!runtimeData.config.hourlyRates) {
+      runtimeData.config.hourlyRates = DEFAULT_CONFIG.hourlyRates;
+    }
+    if (!runtimeData.config.bookingTiming) {
+      runtimeData.config.bookingTiming = DEFAULT_CONFIG.bookingTiming;
+    }
+    if (!runtimeData.config.discountPopup) {
+      runtimeData.config.discountPopup = DEFAULT_CONFIG.discountPopup;
+    }
 
     // Ensure the 5 nets match the 4 practice nets (fee ₹100, max 4) + 1 Cricket/football/Hockey big box turf (fee ₹100, no limit)
     const hasBigBox = runtimeData.nets?.some(
@@ -315,14 +325,89 @@ export class StorageService {
   }
 
   static getConfig(): AcademyConfig {
+    if (!runtimeData.config.hourlyRates) {
+      runtimeData.config.hourlyRates = DEFAULT_CONFIG.hourlyRates;
+    }
+    if (!runtimeData.config.bookingTiming) {
+      runtimeData.config.bookingTiming = DEFAULT_CONFIG.bookingTiming;
+    }
+    if (!runtimeData.config.discountPopup) {
+      runtimeData.config.discountPopup = DEFAULT_CONFIG.discountPopup;
+    }
     return runtimeData.config;
   }
 
   static updateConfig(config: Partial<AcademyConfig>): AcademyConfig {
-    runtimeData.config = { ...runtimeData.config, ...config };
+    runtimeData.config = {
+      ...runtimeData.config,
+      ...config,
+      hourlyRates: {
+        ...(runtimeData.config.hourlyRates || DEFAULT_CONFIG.hourlyRates!),
+        ...(config.hourlyRates || {}),
+      },
+      bookingTiming: {
+        ...(runtimeData.config.bookingTiming || DEFAULT_CONFIG.bookingTiming!),
+        ...(config.bookingTiming || {}),
+      },
+      discountPopup: {
+        ...(runtimeData.config.discountPopup || DEFAULT_CONFIG.discountPopup!),
+        ...(config.discountPopup || {}),
+      },
+    };
     saveToFile();
     syncEntityToFirestore('config', runtimeData.config);
     return runtimeData.config;
+  }
+
+  static addDateSpecificBlock(block: {
+    date: string;
+    startTime: string;
+    endTime: string;
+    reason?: string;
+  }) {
+    if (!runtimeData.config.bookingTiming) {
+      runtimeData.config.bookingTiming = { ...DEFAULT_CONFIG.bookingTiming! };
+    }
+    const newBlock = {
+      id: `block-${Date.now()}`,
+      date: block.date,
+      startTime: block.startTime,
+      endTime: block.endTime,
+      timeRange: `${block.startTime} – ${block.endTime}`,
+      reason: block.reason || 'Blocked by Owner',
+      blockedAt: new Date().toISOString(),
+    };
+    runtimeData.config.bookingTiming.dateSpecificBlocks = [
+      ...(runtimeData.config.bookingTiming.dateSpecificBlocks || []),
+      newBlock,
+    ];
+    saveToFile();
+    syncEntityToFirestore('config', runtimeData.config);
+    return newBlock;
+  }
+
+  static deleteDateSpecificBlock(blockId: string): boolean {
+    if (!runtimeData.config.bookingTiming?.dateSpecificBlocks) return false;
+    const initialLen = runtimeData.config.bookingTiming.dateSpecificBlocks.length;
+    runtimeData.config.bookingTiming.dateSpecificBlocks = runtimeData.config.bookingTiming.dateSpecificBlocks.filter(
+      (b) => b.id !== blockId
+    );
+    saveToFile();
+    syncEntityToFirestore('config', runtimeData.config);
+    return runtimeData.config.bookingTiming.dateSpecificBlocks.length < initialLen;
+  }
+
+  static toggleBlockedHour(hour: number): number[] {
+    if (!runtimeData.config.bookingTiming) {
+      runtimeData.config.bookingTiming = { ...DEFAULT_CONFIG.bookingTiming! };
+    }
+    const current = runtimeData.config.bookingTiming.blockedHours || [];
+    const exists = current.includes(hour);
+    const updated = exists ? current.filter((h) => h !== hour) : [...current, hour].sort((a, b) => a - b);
+    runtimeData.config.bookingTiming.blockedHours = updated;
+    saveToFile();
+    syncEntityToFirestore('config', runtimeData.config);
+    return updated;
   }
 
   static getNets(): CricketNet[] {
@@ -506,11 +591,18 @@ export class StorageService {
   }
 
   static createBooking(bookingData: {
-    sport: 'cricket' | 'swimming';
+    sport: 'cricket' | 'swimming' | 'admission';
+    category?: string;
     resourceId: string;
     resourceName: string;
     date: string;
     timeRange: string;
+    startTime?: string;
+    endTime?: string;
+    durationHours?: number;
+    hourlyRate?: number;
+    originalAmount?: number;
+    discountAmount?: number;
     userName: string;
     userPhone: string;
     userEmail?: string;
@@ -523,68 +615,51 @@ export class StorageService {
     transactionId?: string;
     paymentMethod?: 'UPI_QR' | 'CASH' | 'ONLINE';
   }): { success: boolean; booking?: Booking; error?: string } {
-    // 1. Validation & Race-condition prevention
+    // 1. Conflict Prevention & Overlap Checking
     const { sport, resourceId, date, timeRange, playerCount } = bookingData;
 
-    if (sport === 'cricket') {
-      const slots = this.getCricketSlotsForDate(date);
-      const targetSlot = slots.find(
-        (s) => s.netId === resourceId && s.timeRange === timeRange
-      );
+    if (timeRange && sport !== 'admission') {
+      const [reqStart, reqEnd] = parseTimeRange(timeRange);
+      if (reqStart > 0 && reqEnd > reqStart) {
+        const conflict = checkBookingConflict({
+          date,
+          reqStartMinutes: reqStart,
+          reqEndMinutes: reqEnd,
+          resourceId,
+          sport,
+          bookings: runtimeData.bookings,
+          dateSpecificBlocks: runtimeData.config?.bookingTiming?.dateSpecificBlocks || [],
+          blockedHours: runtimeData.config?.bookingTiming?.blockedHours || [],
+        });
 
-      if (!targetSlot) {
-        return { success: false, error: 'Selected cricket slot does not exist.' };
-      }
-      if (targetSlot.status === 'CLOSED') {
-        return { success: false, error: 'This cricket slot is marked as CLOSED by academy admin.' };
-      }
-
-      const net = this.getNets().find((n) => n.id === resourceId);
-      const isBigBox = Boolean(
-        net?.isBigBox ||
-        net?.name?.toUpperCase().includes('BIG BOX') ||
-        net?.code === 'BOX-CRICKET' ||
-        net?.code === 'BOX-TURF' ||
-        resourceId === 'net-big-box'
-      );
-
-      // Rule: Regular nets have max 4 players; Big Box Turf has no max limit
-      if (!isBigBox && playerCount > 4) {
-        return {
-          success: false,
-          error: 'Regular cricket nets allow a maximum of 4 players at the same time.',
-        };
-      }
-
-      if (!isBigBox && targetSlot.remaining < playerCount) {
-        return {
-          success: false,
-          error: `Insufficient spots available. Only ${targetSlot.remaining} spot(s) left in this net.`,
-        };
-      }
-    } else {
-      const sessions = this.getSwimmingSessionsForDate(date);
-      const targetSession = sessions.find((s) => s.timeRange === timeRange);
-
-      if (!targetSession) {
-        return { success: false, error: 'Selected swimming session does not exist.' };
-      }
-      if (targetSession.status === 'CLOSED') {
-        return { success: false, error: 'This swimming session is marked as CLOSED.' };
-      }
-      if (targetSession.remaining < playerCount) {
-        return {
-          success: false,
-          error: `Insufficient swimming capacity. Only ${targetSession.remaining} spot(s) remaining.`,
-        };
+        if (conflict.hasConflict) {
+          return {
+            success: false,
+            error: conflict.conflictReason || 'Selected time slot is already booked or blocked by the owner.',
+          };
+        }
       }
     }
 
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    const prefix = sport === 'cricket' ? 'KSA-CRK' : 'KSA-SWM';
-    const bookingId = `${prefix}-${randomNum}`;
+    const net = sport === 'cricket' ? this.getNets().find((n) => n.id === resourceId) : null;
+    const isBigBox = Boolean(
+      net?.isBigBox ||
+      net?.name?.toUpperCase().includes('BIG BOX') ||
+      net?.code === 'BOX-CRICKET' ||
+      net?.code === 'BOX-TURF' ||
+      resourceId === 'net-big-box'
+    );
 
-    const calculatedFee = sport === 'cricket' ? 100 * playerCount : (bookingData.amountPaid || 100 * playerCount);
+    if (sport === 'cricket' && !isBigBox && playerCount > 4) {
+      return {
+        success: false,
+        error: 'Regular cricket practice nets allow a maximum of 4 players.',
+      };
+    }
+
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const prefix = sport === 'cricket' ? 'KSA-CRK' : sport === 'swimming' ? 'KSA-SWM' : 'KSA-ADM';
+    const bookingId = `${prefix}-${randomNum}`;
 
     // Sanitize bookingData to remove undefined properties
     const cleanBookingData: Record<string, any> = {};
@@ -597,7 +672,7 @@ export class StorageService {
     const newBooking: Booking = {
       ...(cleanBookingData as any),
       id: bookingId,
-      amountPaid: bookingData.amountPaid ?? calculatedFee,
+      amountPaid: bookingData.amountPaid ?? 0,
       status: 'CONFIRMED',
       paymentStatus: bookingData.paymentStatus || (bookingData.paymentScreenshot || bookingData.transactionId ? 'PENDING_VERIFICATION' : 'APPROVED'),
       createdAt: new Date().toISOString(),

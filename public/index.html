@@ -2112,6 +2112,96 @@
    <script src="assets/js/slider-init.js"></script>
    <script src="assets/js/main.js"></script>
 
+   <!-- Special Event Discount Popup Dynamic Injector -->
+   <script>
+     (function() {
+       try {
+         if (sessionStorage.getItem('ksa_discount_popup_dismissed') === 'true') return;
+         fetch('/api/config')
+           .then(function(res) { return res.json(); })
+           .then(function(data) {
+             if (!data || !data.success || !data.config || !data.config.discountPopup || !data.config.discountPopup.enabled) return;
+             var cfg = data.config.discountPopup;
+             var title = cfg.title || '🎉 Special Festive Discount!';
+             var desc = cfg.description || 'Special limited time offer available on cricket turf, swimming sessions and admissions!';
+             var discountText = cfg.discountText || 'FLAT 20% OFF';
+             var couponCode = cfg.couponCode || 'KSA20';
+             var btnText = cfg.buttonText || 'Claim Discount Now';
+
+             var popupHtml = `
+               <div id="ksa-discount-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:sans-serif;opacity:0;transition:opacity 0.3s ease;">
+                 <div style="background:#FAF4ED;border:2px solid rgba(140,90,50,0.3);box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);border-radius:24px;max-width:440px;width:100%;position:relative;overflow:hidden;padding:24px;text-align:center;">
+                   <button id="ksa-close-btn" style="position:absolute;top:12px;right:12px;background:white;border:1px solid rgba(140,90,50,0.2);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;color:#5C4033;font-weight:bold;">&times;</button>
+                   
+                   <div style="display:inline-block;background:#FEF3C7;color:#92400E;padding:4px 14px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;border:1px solid #FCD34D;margin-bottom:12px;">
+                     ✨ Special Event Offer
+                   </div>
+
+                   <h3 style="font-size:22px;font-weight:800;color:#2C1A0E;margin:0 0 8px;line-height:1.2;">${title}</h3>
+                   <p style="font-size:13px;color:#5C4033;margin:0 0 16px;line-height:1.5;">${desc}</p>
+
+                   <div style="background:#FFFBEB;border:2px dashed #F59E0B;border-radius:16px;padding:14px;margin-bottom:18px;">
+                     <div style="font-size:26px;font-weight:900;color:#B45309;letter-spacing:-0.5px;margin-bottom:6px;">${discountText}</div>
+                     ${couponCode ? `
+                       <div style="display:inline-flex;align-items:center;gap:8px;background:white;padding:6px 14px;border-radius:10px;border:1px solid #FCD34D;cursor:pointer;" id="ksa-copy-code-btn">
+                         <span style="font-size:11px;color:#78350F;font-weight:700;">Coupon:</span>
+                         <code style="font-family:monospace;font-size:14px;font-weight:800;color:#B45309;background:#FEF3C7;padding:2px 8px;border-radius:6px;">${couponCode}</code>
+                         <span id="ksa-copy-lbl" style="font-size:10px;color:#B45309;font-weight:600;text-decoration:underline;">Click to Copy</span>
+                       </div>
+                     ` : ''}
+                   </div>
+
+                   <div style="display:flex;flex-direction:column;gap:10px;">
+                     <a href="/booking${couponCode ? '?coupon=' + encodeURIComponent(couponCode) : ''}" style="background:linear-gradient(135deg, #2C1A0E, #8C5A32);color:#FAF4ED;text-decoration:none;padding:14px;border-radius:14px;font-size:14px;font-weight:700;display:block;box-shadow:0 4px 12px rgba(140,90,50,0.3);letter-spacing:0.02em;">
+                       ${btnText} &rarr;
+                     </a>
+                     <button id="ksa-dismiss-btn" style="background:transparent;border:none;color:#7A5C4A;font-size:12px;font-weight:600;cursor:pointer;padding:4px;">
+                       Maybe Later / Skip
+                     </button>
+                   </div>
+                 </div>
+               </div>
+             `;
+
+             setTimeout(function() {
+               var div = document.createElement('div');
+               div.innerHTML = popupHtml;
+               document.body.appendChild(div);
+               var overlay = document.getElementById('ksa-discount-overlay');
+               if (overlay) {
+                 setTimeout(function() { overlay.style.opacity = '1'; }, 50);
+                 var close = function() {
+                   overlay.style.opacity = '0';
+                   setTimeout(function() { if (div.parentNode) div.parentNode.removeChild(div); }, 300);
+                   sessionStorage.setItem('ksa_discount_popup_dismissed', 'true');
+                 };
+                 var closeBtn = document.getElementById('ksa-close-btn');
+                 if (closeBtn) closeBtn.onclick = close;
+                 var dismissBtn = document.getElementById('ksa-dismiss-btn');
+                 if (dismissBtn) dismissBtn.onclick = close;
+                 overlay.onclick = function(e) { if (e.target === overlay) close(); };
+                 var copyBtn = document.getElementById('ksa-copy-code-btn');
+                 if (copyBtn && couponCode) {
+                   copyBtn.onclick = function(e) {
+                     e.stopPropagation();
+                     navigator.clipboard.writeText(couponCode);
+                     var lbl = document.getElementById('ksa-copy-lbl');
+                     if (lbl) {
+                       lbl.innerText = 'Copied! ✓';
+                       lbl.style.color = '#15803D';
+                     }
+                   };
+                 }
+               }
+             }, 1200);
+           })
+           .catch(function(err) { console.warn(err); });
+       } catch (e) {
+         console.warn(e);
+       }
+     })();
+   </script>
+
 </body>
 
 </html>

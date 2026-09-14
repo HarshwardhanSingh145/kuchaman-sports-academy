@@ -28,6 +28,7 @@ import {
 import { CricketNet, CricketSlot, SwimmingSession, Booking, AcademyConfig } from '@/lib/types';
 import { useLanguage } from '@/lib/LanguageContext';
 import { DEFAULT_NETS, DEFAULT_CONFIG, CRICKET_TIME_SLOTS, SWIMMING_TIME_SLOTS } from '@/lib/defaults';
+import { BookingTimeWatch } from '@/components/BookingTimeWatch';
 
 export type BookingCategory = 'cricket' | 'swimming' | 'admission';
 
@@ -46,13 +47,19 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
   // Current active step: 1 (Selection/Details), 2 (Details/Payment), 3 (Payment for 3-step flows)
   const [currentStep, setCurrentStep] = useState<number>(1);
 
-  // Step 1 State: Cricket Selection
+  // Step 1 State: Cricket & Time Watch Selection
   const [selectedNetType, setSelectedNetType] = useState<'bigbox' | 'practice'>('bigbox');
   const [selectedNetId, setSelectedNetId] = useState<string>('net-big-box');
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     return new Date().toISOString().split('T')[0];
   });
   const [selectedSlotTime, setSelectedSlotTime] = useState<string>('06:00 PM – 07:00 PM');
+  const [selectedStartTime, setSelectedStartTime] = useState<string>('06:00 PM');
+  const [selectedEndTime, setSelectedEndTime] = useState<string>('07:00 PM');
+  const [durationHours, setDurationHours] = useState<number>(1);
+  const [slotHourlyRate, setSlotHourlyRate] = useState<number>(1000);
+  const [isSlotValid, setIsSlotValid] = useState<boolean>(true);
+  const [slotConflictReason, setSlotConflictReason] = useState<string | undefined>();
 
   // Step 1 State: Swimming Selection
   const [selectedSwimmingSession, setSelectedSwimmingSession] = useState<string>('06:00 AM – 07:00 AM');
@@ -130,22 +137,47 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
   }, [isHindi]);
 
   // ---------------------------------------------------------------------------
-  // 3. Pricing & 10% Online Booking Discount Calculations (Global Rule)
+  // 3. Time Watch Callback & Dynamic Pricing with 10% Online Booking Discount
   // ---------------------------------------------------------------------------
+  const handleTimeChange = useCallback(
+    (selection: {
+      startTime: string;
+      endTime: string;
+      durationHours: number;
+      timeRange: string;
+      hourlyRate: number;
+      originalPrice: number;
+      discountAmount: number;
+      finalPrice: number;
+      isValid: boolean;
+      conflictReason?: string;
+    }) => {
+      setSelectedStartTime(selection.startTime);
+      setSelectedEndTime(selection.endTime);
+      setSelectedSlotTime(selection.timeRange);
+      setDurationHours(selection.durationHours);
+      setSlotHourlyRate(selection.hourlyRate);
+      setIsSlotValid(selection.isValid);
+      setSlotConflictReason(selection.conflictReason);
+    },
+    []
+  );
+
   const { originalPrice, discountAmount, finalPayableAmount } = useMemo(() => {
     let base = 0;
 
     if (category === 'cricket') {
       if (selectedNetType === 'bigbox') {
-        // Big box arena flat rate or per-hour slot
-        base = 1000;
+        const rate = ownerConfig?.hourlyRates?.cricketBigBox || 1000;
+        base = Math.round(rate * durationHours);
       } else {
-        // Practice net: ₹100 per person
-        base = 100 * Math.max(1, playerCount);
+        // Practice net: ₹100 per person per hour
+        base = Math.round(100 * Math.max(1, playerCount) * durationHours);
       }
     } else if (category === 'swimming') {
-      // Swimming pool: ₹100 per swimmer session
-      base = 100 * Math.max(1, playerCount);
+      // Swimming pool: ₹100 per swimmer session per hour
+      const poolRate = ownerConfig?.hourlyRates?.swimmingPool || 100;
+      base = Math.round(poolRate * Math.max(1, playerCount) * durationHours);
     } else if (category === 'admission') {
       // Admission: ₹1000 per student (as explicitly specified in user prompt)
       base = 1000 * Math.max(1, studentCount);
@@ -160,7 +192,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
       discountAmount: discount,
       finalPayableAmount: payable,
     };
-  }, [category, selectedNetType, playerCount, studentCount]);
+  }, [category, selectedNetType, playerCount, studentCount, durationHours, ownerConfig]);
 
   // ---------------------------------------------------------------------------
   // 4. UPI QR & Payment Info
@@ -220,6 +252,15 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
       // Cricket or Swimming Step 1 is Slot & Date selection
       if (!selectedDate) {
         setFormError(isHindi ? 'कृपया तारीख चुनें' : 'Please select a date');
+        return;
+      }
+      if (!isSlotValid) {
+        setFormError(
+          slotConflictReason ||
+            (isHindi
+              ? 'चयनित समय स्लॉट उपलब्ध नहीं है। कृपया कोई अन्य उपलब्ध समय चुनें।'
+              : 'The selected time slot is unavailable. Please choose another available time on the watch.')
+        );
         return;
       }
       // Valid! Smoothly transition to Step 2 (Details)
@@ -305,14 +346,21 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
             ? selectedNetType === 'bigbox'
               ? 'Big Box Cricket Turf (160x70 ft)'
               : 'Cricket Practice Net'
-            : `Swimming Session: ${selectedSwimmingSession}`;
+            : 'Semi-Olympic Swimming Pool';
 
         const bookingPayload = {
           sport: category,
+          category: category === 'cricket' && selectedNetType === 'bigbox' ? 'cricket_bigbox' : category,
           resourceId: category === 'cricket' ? selectedNetId : 'swimming-pool',
           resourceName,
           date: selectedDate,
-          timeRange: category === 'cricket' ? selectedSlotTime : selectedSwimmingSession,
+          timeRange: selectedSlotTime,
+          startTime: selectedStartTime,
+          endTime: selectedEndTime,
+          durationHours,
+          hourlyRate: slotHourlyRate,
+          originalAmount: originalPrice,
+          discountAmount,
           userName: customerName.trim(),
           userPhone: customerPhone.trim(),
           playerCount: Number(playerCount) || 1,
@@ -337,8 +385,8 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
           id: bookingId,
           category,
           title: resourceName,
-          details: `${category === 'cricket' ? (isHindi ? 'खिलाड़ी' : 'Players') : (isHindi ? 'व्यक्ति' : 'Swimmers')}: ${playerCount}`,
-          dateTime: `${selectedDate} • ${category === 'cricket' ? selectedSlotTime : selectedSwimmingSession}`,
+          details: `${category === 'cricket' ? (isHindi ? 'खिलाड़ी' : 'Players') : (isHindi ? 'व्यक्ति' : 'Swimmers')}: ${playerCount} • ${durationHours} ${durationHours === 1 ? (isHindi ? 'घंटा' : 'Hour') : (isHindi ? 'घंटे' : 'Hours')}`,
+          dateTime: `${selectedDate} • ${selectedSlotTime}`,
           personName: customerName,
           contactNumber: customerPhone,
           count: playerCount,
@@ -1028,71 +1076,21 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 </div>
               </div>
 
-              {/* Time Slot Selection */}
-              {category === 'cricket' ? (
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-neutral-600 uppercase tracking-wide">
-                    {isHindi ? 'समय का स्लॉट चुनें (Select Time Slot)' : 'Select Time Slot'}
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {CRICKET_TIME_SLOTS.map((slot) => {
-                      const isSelected = selectedSlotTime === slot.timeRange;
-                      return (
-                        <button
-                          key={slot.timeRange}
-                          type="button"
-                          onClick={() => setSelectedSlotTime(slot.timeRange)}
-                          className={`py-2.5 px-2 rounded-xl text-xs font-bold border transition-all text-center cursor-pointer ${
-                            isSelected
-                              ? 'bg-[#2C1A0E] text-white border-[#2C1A0E] shadow-xs'
-                              : 'bg-neutral-50 hover:bg-neutral-100 text-neutral-800 border-neutral-200'
-                          }`}
-                        >
-                          <p>{slot.startTime}</p>
-                          <p className="text-[10px] opacity-70 font-normal">
-                            {isHindi ? 'उपलब्ध' : 'Available'}
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                /* Swimming Sessions */
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-neutral-600 uppercase tracking-wide">
-                    {isHindi ? 'स्विमिंग सेशन चुनें (Select Session)' : 'Select Session'}
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {SWIMMING_TIME_SLOTS.map((ses) => {
-                      const isSelected = selectedSwimmingSession === ses.timeRange;
-                      return (
-                        <button
-                          key={ses.timeRange}
-                          type="button"
-                          onClick={() => setSelectedSwimmingSession(ses.timeRange)}
-                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                            isSelected
-                              ? 'border-[#2C1A0E] bg-[#FAF8F5] shadow-xs ring-2 ring-[#2C1A0E]/15'
-                              : 'border-neutral-200 hover:border-neutral-300 bg-white'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-black text-[#2C1A0E]">{ses.title}</span>
-                            {isSelected && (
-                              <div className="w-4 h-4 rounded-full bg-[#2C1A0E] text-white flex items-center justify-center text-[10px]">
-                                <Check className="w-2.5 h-2.5" />
-                              </div>
-                            )}
-                          </div>
-                          <p className="text-xs text-neutral-500 mt-0.5">{ses.timeRange}</p>
-                          <p className="text-xs font-bold text-emerald-700 mt-1">₹100 (10% छूट: ₹90)</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              {/* Visual Booking Time Watch / Time Picker */}
+              <div className="pt-1">
+                <BookingTimeWatch
+                  selectedDate={selectedDate}
+                  selectedSport={category as 'cricket' | 'swimming'}
+                  selectedResourceId={category === 'cricket' ? selectedNetId : 'swimming-pool'}
+                  selectedTurfType={selectedNetType}
+                  playerCount={playerCount}
+                  initialStartTime={selectedStartTime}
+                  initialDurationHours={durationHours}
+                  ownerConfig={ownerConfig}
+                  isHindi={isHindi}
+                  onTimeChange={handleTimeChange}
+                />
+              </div>
 
               {/* Primary Action Button: Step 1 -> Step 2 */}
               <button
@@ -1124,11 +1122,11 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                   <p className="text-sm font-bold text-neutral-900">
                     {category === 'cricket'
                       ? selectedNetType === 'bigbox'
-                        ? 'बॉक्स टर्फ (Big Box)'
-                        : 'प्रैक्टिस नेट (Practice Net)'
-                      : 'स्विमिंग पूल'}{' '}
-                    • {selectedDate} •{' '}
-                    {category === 'cricket' ? selectedSlotTime : selectedSwimmingSession}
+                        ? (isHindi ? 'बॉक्स टर्फ (Big Box)' : 'Big Box Cricket Turf')
+                        : (isHindi ? 'प्रैक्टिस नेट (Practice Net)' : 'Practice Net')
+                      : (isHindi ? 'स्विमिंग पूल' : 'Swimming Pool')}{' '}
+                    • {selectedDate} • {selectedSlotTime} ({durationHours}{' '}
+                    {durationHours === 1 ? (isHindi ? 'घंटा' : 'hr') : (isHindi ? 'घंटे' : 'hrs')})
                   </p>
                 </div>
               </div>

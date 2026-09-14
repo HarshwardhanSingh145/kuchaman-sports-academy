@@ -48,11 +48,18 @@ export interface SwimmingSession {
 
 export interface Booking {
   id: string;
-  sport: SportType;
+  sport: SportType | 'admission';
+  category?: string; // e.g., 'cricket_bigbox', 'cricket_net', 'swimming', 'admission'
   resourceId: string;
   resourceName: string;
   date: string;
   timeRange: string;
+  startTime?: string;
+  endTime?: string;
+  durationHours?: number;
+  hourlyRate?: number;
+  originalAmount?: number;
+  discountAmount?: number;
   userName: string;
   userPhone: string;
   userEmail?: string;
@@ -71,6 +78,48 @@ export interface Booking {
   verifiedBy?: string;
 }
 
+export interface HourlyRatesConfig {
+  cricketBigBox: number; // e.g. 1000
+  cricketPracticeNet: number; // e.g. 500 (or 100 per person)
+  swimmingPool: number; // e.g. 100
+  admission: number; // e.g. 1000
+}
+
+export interface DateSpecificBlock {
+  id: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // e.g. "07:00 PM"
+  endTime: string; // e.g. "09:00 PM"
+  timeRange: string; // e.g. "07:00 PM – 09:00 PM"
+  reason?: string; // e.g. "Blocked by Owner"
+  blockedAt: string;
+}
+
+export interface BookingTimingConfig {
+  startHour: number; // 0-23 (e.g. 6 for 06:00 AM)
+  endHour: number; // 0-23 or 26 (e.g. 2 for 02:00 AM next day)
+  operatingHoursText: string; // e.g. "06:00 AM – 02:00 AM"
+  blockedHours: number[]; // Global daily blocked hours, e.g. [8, 14]
+  dateSpecificBlocks: DateSpecificBlock[];
+}
+
+export interface DiscountPopupConfig {
+  enabled: boolean;
+  title: string; // e.g., "त्योहार स्पेशल ऑफर 🏏 🏊" / "Special Event Discount"
+  discountBadge: string; // e.g., "15% EXTRA OFF" or "FLAT 20% DISCOUNT"
+  discountPercentage: number; // e.g., 15 or 20
+  discountText?: string; // e.g. "FLAT 20% OFF"
+  description: string; // e.g., "स्पेशल इवेंट पर कुचामन स्पोर्ट्स एकैडमी के क्रिकेट टर्फ और स्विमिंग स्लॉट पर पाएं विशेष छूट!"
+  couponCode?: string; // e.g., "KSAEVENT2026"
+  validTill?: string; // e.g., "30 सितम्बर तक मान्य (Limited Time)"
+  imageUrl?: string; // Optional promotional image
+  applicableSport?: 'all' | 'cricket' | 'swimming' | 'admission';
+  buttonText?: string; // e.g., "अभी डिस्काउंट क्लेम करें (Book Now)"
+  ctaAction?: 'booking' | 'external_url' | 'coupon_only';
+  ctaUrl?: string;
+  displayDelaySeconds?: number;
+}
+
 export interface AcademyConfig {
   name: string;
   shortName: string;
@@ -86,6 +135,12 @@ export interface AcademyConfig {
   upiAccountName?: string; // e.g. Kuchaman Sports Academy
   bankName?: string;
   paymentInstructions?: string;
+  // Special Event Discount Pop-up Configuration
+  discountPopup?: DiscountPopupConfig;
+  // Dynamic Hourly Rate Management
+  hourlyRates?: HourlyRatesConfig;
+  // Global & Date-specific Booking Timing Controls
+  bookingTiming?: BookingTimingConfig;
 }
 
 // ----------------------------------------------------

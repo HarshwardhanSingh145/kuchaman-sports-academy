@@ -164,8 +164,35 @@ export const DEFAULT_CONFIG: AcademyConfig = {
   address: 'Near Stadium Bypass Road, Kuchaman City, Rajasthan',
   phone: '+91 98290 84421',
   email: 'info@kuchamansports.in',
-  operatingHours: '05:30 AM – 10:00 PM (Monday – Sunday)',
+  operatingHours: '06:00 AM – 02:00 AM (Monday – Sunday)',
   disabledDates: [],
+  hourlyRates: {
+    cricketBigBox: 1000,
+    cricketPracticeNet: 500,
+    swimmingPool: 100,
+    admission: 1000,
+  },
+  bookingTiming: {
+    startHour: 6, // 06:00 AM
+    endHour: 2, // 02:00 AM (next morning)
+    operatingHoursText: '06:00 AM – 02:00 AM',
+    blockedHours: [],
+    dateSpecificBlocks: [],
+  },
+  discountPopup: {
+    enabled: true,
+    title: 'स्पेशल इवेंट धमाका ऑफर! 🏏 🏊',
+    discountBadge: '15% EXTRA OFF',
+    discountPercentage: 15,
+    discountText: 'FLAT 15% OFF',
+    description: 'कुचामन स्पोर्ट्स एकैडमी के बॉक्स क्रिकेट टर्फ, नेट प्रैक्टिस और स्विमिंग पूल स्लॉट पर विशेष छूट!',
+    couponCode: 'KSAEVENT2026',
+    validTill: 'सीमित समय के लिए उपलब्ध (Limited Period Offer)',
+    applicableSport: 'all',
+    buttonText: 'अभी स्लॉट बुक करें (Claim Discount)',
+    ctaAction: 'booking',
+    displayDelaySeconds: 1,
+  },
 };
 
 export const DEFAULT_OWNER_SIGNATURE = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 90" width="300" height="90"><path d="M25,55 C45,20 60,65 75,35 C90,15 100,50 115,40 C130,30 145,55 160,35 C175,25 200,60 220,40 C240,25 260,50 280,35 M50,65 L270,55" fill="none" stroke="%231a365d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><text x="45" y="80" font-family="'Brush Script MT', cursive, sans-serif" font-size="16" fill="%231a365d">Jay Prakash Bhakar</text></svg>`;

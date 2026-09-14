@@ -7,6 +7,7 @@ import { HeroSection } from '@/components/HeroSection';
 import { BookingSection } from '@/components/BookingSection';
 import { Footer } from '@/components/Footer';
 import { AdminModal } from '@/components/AdminModal';
+import { SpecialEventDiscountPopup } from '@/components/SpecialEventDiscountPopup';
 import AdmissionPanel from '@/components/AdmissionPanel';
 import MentorPanel from '@/components/MentorPanel';
 
@@ -124,6 +125,9 @@ export default function HomePage() {
             onClose={() => setIsAdminOpen(false)}
             onDataChanged={handleDataChanged}
           />
+
+          {/* 5. Customer Special Event Discount Popup */}
+          <SpecialEventDiscountPopup />
         </main>
       </LanguageProvider>
     </FirebaseProvider>
