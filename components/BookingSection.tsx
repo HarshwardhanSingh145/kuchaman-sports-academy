@@ -30,6 +30,7 @@ import { useLanguage } from '@/lib/LanguageContext';
 import { DEFAULT_NETS, DEFAULT_CONFIG, CRICKET_TIME_SLOTS, SWIMMING_TIME_SLOTS } from '@/lib/defaults';
 import { BookingTimeWatch } from '@/components/BookingTimeWatch';
 import { subscribeToConfig, createFirestoreBooking } from '@/lib/firestore-service';
+import { TermsModal } from '@/components/TermsModal';
 
 export type BookingCategory = 'cricket' | 'swimming' | 'admission';
 
@@ -91,6 +92,11 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
   const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [formError, setFormError] = useState<string>('');
+
+  // Terms & Conditions Acceptance State
+  const [agreedToTerms, setAgreedToTerms] = useState<boolean>(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState<boolean>(false);
+  const [termsHighlighted, setTermsHighlighted] = useState<boolean>(false);
 
   // Confirmed Result State
   const [confirmedBooking, setConfirmedBooking] = useState<{
@@ -313,6 +319,18 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
   // ---------------------------------------------------------------------------
   const handleFinalConfirmBooking = async () => {
     setFormError('');
+
+    if (!agreedToTerms) {
+      setFormError(
+        isHindi
+          ? 'कृपया आगे बढ़ने से पहले नियम एवं शर्तें (Terms & Conditions) को पढ़कर स्वीकार करें।'
+          : 'Please read and agree to the Terms & Conditions before confirming your booking.'
+      );
+      setTermsHighlighted(true);
+      setTimeout(() => setTermsHighlighted(false), 3000);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -966,12 +984,62 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 />
               </div>
 
+              {/* Terms & Conditions Acceptance Checkbox */}
+              <div
+                id="admission-terms-container"
+                className={`p-4 rounded-2xl border transition-all ${
+                  termsHighlighted
+                    ? 'bg-red-50 border-red-300 ring-2 ring-red-400/40'
+                    : agreedToTerms
+                    ? 'bg-emerald-50/70 border-emerald-300'
+                    : 'bg-neutral-50 border-neutral-300 hover:border-neutral-400'
+                }`}
+              >
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    id="admission-terms-checkbox"
+                    type="checkbox"
+                    checked={agreedToTerms}
+                    onChange={(e) => {
+                      setAgreedToTerms(e.target.checked);
+                      if (e.target.checked) setFormError('');
+                    }}
+                    className="mt-1 w-5 h-5 rounded-md text-emerald-600 focus:ring-emerald-500 border-neutral-300 cursor-pointer shrink-0"
+                  />
+                  <div className="text-xs sm:text-sm text-neutral-800 leading-snug">
+                    <span>
+                      {isHindi ? 'मैंने खेल सुरक्षा दिशानिर्देश एवं ' : 'I have read and agree to the '}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsTermsModalOpen(true);
+                      }}
+                      className="inline font-bold text-[#8C5A32] hover:text-[#2C1A0E] underline underline-offset-2 cursor-pointer"
+                    >
+                      {isHindi ? 'नियम व शर्तें (Terms & Conditions)' : 'Terms & Conditions'}
+                    </button>
+                    <span>
+                      {isHindi
+                        ? ' पढ़ ली हैं और सहमत हूँ, तथा खेल गतिविधि के सुरक्षा नियमों को समझता/समझती हूँ।'
+                        : ' and understand the safety guidelines applicable to the selected sports activity.'}
+                    </span>
+                  </div>
+                </label>
+              </div>
+
               {/* Confirm Admission Button */}
               <button
                 type="button"
                 disabled={isSubmitting}
                 onClick={handleFinalConfirmBooking}
-                className="w-full h-14 rounded-2xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 cursor-pointer"
+                className={`w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 cursor-pointer ${
+                  agreedToTerms
+                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                    : 'bg-neutral-200 hover:bg-neutral-300 text-neutral-700 border border-neutral-300'
+                } disabled:opacity-50`}
               >
                 {isSubmitting ? (
                   <span>{isHindi ? 'कन्फर्म हो रहा है...' : 'Confirming Admission...'}</span>
@@ -1469,12 +1537,62 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 />
               </div>
 
+              {/* Terms & Conditions Acceptance Checkbox */}
+              <div
+                id="booking-terms-container"
+                className={`p-4 rounded-2xl border transition-all ${
+                  termsHighlighted
+                    ? 'bg-red-50 border-red-300 ring-2 ring-red-400/40'
+                    : agreedToTerms
+                    ? 'bg-emerald-50/70 border-emerald-300'
+                    : 'bg-neutral-50 border-neutral-300 hover:border-neutral-400'
+                }`}
+              >
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    id="booking-terms-checkbox"
+                    type="checkbox"
+                    checked={agreedToTerms}
+                    onChange={(e) => {
+                      setAgreedToTerms(e.target.checked);
+                      if (e.target.checked) setFormError('');
+                    }}
+                    className="mt-1 w-5 h-5 rounded-md text-emerald-600 focus:ring-emerald-500 border-neutral-300 cursor-pointer shrink-0"
+                  />
+                  <div className="text-xs sm:text-sm text-neutral-800 leading-snug">
+                    <span>
+                      {isHindi ? 'मैंने खेल सुरक्षा दिशानिर्देश एवं ' : 'I have read and agree to the '}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsTermsModalOpen(true);
+                      }}
+                      className="inline font-bold text-[#8C5A32] hover:text-[#2C1A0E] underline underline-offset-2 cursor-pointer"
+                    >
+                      {isHindi ? 'नियम व शर्तें (Terms & Conditions)' : 'Terms & Conditions'}
+                    </button>
+                    <span>
+                      {isHindi
+                        ? ' पढ़ ली हैं और सहमत हूँ, तथा चुनी गई खेल गतिविधि के सुरक्षा नियमों को समझता/समझती हूँ।'
+                        : ' and understand the safety guidelines applicable to the selected sports activity.'}
+                    </span>
+                  </div>
+                </label>
+              </div>
+
               {/* Confirm Booking Button */}
               <button
                 type="button"
                 disabled={isSubmitting}
                 onClick={handleFinalConfirmBooking}
-                className="w-full h-14 rounded-2xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 cursor-pointer"
+                className={`w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 cursor-pointer ${
+                  agreedToTerms
+                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                    : 'bg-neutral-200 hover:bg-neutral-300 text-neutral-700 border border-neutral-300'
+                } disabled:opacity-50`}
               >
                 {isSubmitting ? (
                   <span>{isHindi ? 'कन्फर्म हो रहा है...' : 'Confirming Booking...'}</span>
@@ -1493,6 +1611,16 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
           )}
         </div>
       )}
+
+      {/* Full Terms & Conditions Modal */}
+      <TermsModal
+        isOpen={isTermsModalOpen}
+        onClose={() => setIsTermsModalOpen(false)}
+        onAccept={() => {
+          setAgreedToTerms(true);
+          setFormError('');
+        }}
+      />
     </div>
   );
 }

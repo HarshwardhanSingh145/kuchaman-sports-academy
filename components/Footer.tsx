@@ -1,14 +1,15 @@
 'use client';
 
 import React from 'react';
-import { Shield, Languages } from 'lucide-react';
+import { Shield, Languages, FileText } from 'lucide-react';
 import { useLanguage } from '@/lib/LanguageContext';
 
 interface FooterProps {
   onOpenAdmin: () => void;
+  onOpenTerms?: () => void;
 }
 
-export function Footer({ onOpenAdmin }: FooterProps) {
+export function Footer({ onOpenAdmin, onOpenTerms }: FooterProps) {
   const { language, setLanguage, isHindi } = useLanguage();
   const currentYear = new Date().getFullYear();
 
@@ -57,6 +58,19 @@ export function Footer({ onOpenAdmin }: FooterProps) {
               English
             </button>
           </div>
+
+          {/* Terms & Conditions Button */}
+          {onOpenTerms && (
+            <button
+              id="footer-terms-btn"
+              type="button"
+              onClick={onOpenTerms}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white hover:bg-neutral-200 border border-neutral-200 text-xs font-semibold text-[#2C1A0E] transition-colors cursor-pointer shadow-2xs"
+            >
+              <FileText className="w-3.5 h-3.5 text-[#8C5A32]" />
+              <span>{isHindi ? 'नियम व शर्तें' : 'Terms & Conditions'}</span>
+            </button>
+          )}
 
           {/* Admin Login Button */}
           <button

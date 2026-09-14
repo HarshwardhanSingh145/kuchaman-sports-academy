@@ -7,6 +7,7 @@ import { HeroSection } from '@/components/HeroSection';
 import { BookingSection } from '@/components/BookingSection';
 import { Footer } from '@/components/Footer';
 import { AdminModal } from '@/components/AdminModal';
+import { TermsModal } from '@/components/TermsModal';
 import { SpecialEventDiscountPopup } from '@/components/SpecialEventDiscountPopup';
 import AdmissionPanel from '@/components/AdmissionPanel';
 import MentorPanel from '@/components/MentorPanel';
@@ -16,6 +17,7 @@ import { FirebaseProvider } from '@/lib/FirebaseContext';
 
 export default function HomePage() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
   // Multi-view: 'cricket' | 'swimming' | 'admission' | 'mentor'
   const [activeView, setActiveView] = useState<'cricket' | 'swimming' | 'admission' | 'mentor'>('cricket');
   const [bookingKey, setBookingKey] = useState(0);
@@ -45,6 +47,10 @@ export default function HomePage() {
       const sportParam = params.get('sport');
       const viewParam = params.get('view');
       const catParam = params.get('category');
+      const termsParam = params.get('terms');
+      if (termsParam === 'open' || termsParam === 'true') {
+        setIsTermsOpen(true);
+      }
       if (sportParam === 'cricket' || sportParam === 'swimming') {
         setActiveView(sportParam);
       } else if (viewParam === 'admission' || catParam === 'admission') {
@@ -117,16 +123,25 @@ export default function HomePage() {
           </div>
 
           {/* 3. Minimal Clean Footer */}
-          <Footer onOpenAdmin={() => setIsAdminOpen(true)} />
+          <Footer
+            onOpenAdmin={() => setIsAdminOpen(true)}
+            onOpenTerms={() => setIsTermsOpen(true)}
+          />
 
-          {/* 4. Protected Admin Dashboard Modal */}
+          {/* 4. Terms & Conditions Modal */}
+          <TermsModal
+            isOpen={isTermsOpen}
+            onClose={() => setIsTermsOpen(false)}
+          />
+
+          {/* 5. Protected Admin Dashboard Modal */}
           <AdminModal
             isOpen={isAdminOpen}
             onClose={() => setIsAdminOpen(false)}
             onDataChanged={handleDataChanged}
           />
 
-          {/* 5. Customer Special Event Discount Popup */}
+          {/* 6. Customer Special Event Discount Popup */}
           <SpecialEventDiscountPopup />
         </main>
       </LanguageProvider>
