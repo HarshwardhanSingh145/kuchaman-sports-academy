@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Check,
@@ -39,6 +39,15 @@ interface BookingSectionProps {
 
 export function BookingSection({ initialSport = 'cricket', onBack }: BookingSectionProps) {
   const { isHindi } = useLanguage();
+  const bookingContainerRef = useRef<HTMLDivElement>(null);
+
+  const scrollToTopSmoothly = () => {
+    if (bookingContainerRef.current) {
+      bookingContainerRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
 
   // ---------------------------------------------------------------------------
   // 1. Core Category & Active Step State
@@ -230,6 +239,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
     setCategory(newCat);
     setCurrentStep(1);
     setFormError('');
+    scrollToTopSmoothly();
   };
 
   // Step 1 Validation -> Proceed to Step 2
@@ -247,7 +257,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
       }
       // Valid! Smoothly transition to Step 2 (Payment)
       setCurrentStep(2);
-      window.scrollTo({ top: 120, behavior: 'smooth' });
+      scrollToTopSmoothly();
     } else {
       // Cricket or Swimming Step 1 is Slot & Date selection
       if (!selectedDate) {
@@ -265,7 +275,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
       }
       // Valid! Smoothly transition to Step 2 (Details)
       setCurrentStep(2);
-      window.scrollTo({ top: 120, behavior: 'smooth' });
+      scrollToTopSmoothly();
     }
   };
 
@@ -282,7 +292,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
     }
     // Valid! Smoothly transition to Step 3 (Payment)
     setCurrentStep(3);
-    window.scrollTo({ top: 120, behavior: 'smooth' });
+    scrollToTopSmoothly();
   };
 
   // ---------------------------------------------------------------------------
@@ -397,7 +407,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
         });
       }
 
-      window.scrollTo({ top: 40, behavior: 'smooth' });
+      scrollToTopSmoothly();
     } catch (err: any) {
       setFormError(err?.message || 'Booking submission failed. Please try again.');
     } finally {
@@ -415,6 +425,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
     setTransactionId('');
     setPaymentScreenshot('');
     setFormError('');
+    scrollToTopSmoothly();
   };
 
   // ---------------------------------------------------------------------------
@@ -426,7 +437,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
     );
 
     return (
-      <div className="w-full max-w-xl mx-auto px-4 py-8 select-none">
+      <div ref={bookingContainerRef} className="w-full max-w-xl mx-auto px-4 py-8 select-none scroll-smooth">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -549,7 +560,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
   const totalSteps = category === 'admission' ? 2 : 3;
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-4 pt-4 pb-16 select-none">
+    <div ref={bookingContainerRef} className="w-full max-w-2xl mx-auto px-4 pt-4 pb-16 select-none scroll-smooth">
       {/* Top Header Card */}
       <div className="text-center mb-5">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-black tracking-wide uppercase mb-2 shadow-2xs">
@@ -789,7 +800,10 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
               layout
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              onClick={() => setCurrentStep(1)}
+              onClick={() => {
+                setCurrentStep(1);
+                scrollToTopSmoothly();
+              }}
               className="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-200 flex items-center justify-between shadow-2xs cursor-pointer hover:bg-emerald-100/70 transition-colors"
             >
               <div className="flex items-center gap-3">
@@ -1108,7 +1122,10 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
               layout
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              onClick={() => setCurrentStep(1)}
+              onClick={() => {
+                setCurrentStep(1);
+                scrollToTopSmoothly();
+              }}
               className="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-200 flex items-center justify-between shadow-2xs cursor-pointer hover:bg-emerald-100/70 transition-colors"
             >
               <div className="flex items-center gap-3">
@@ -1283,7 +1300,10 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
               layout
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              onClick={() => setCurrentStep(2)}
+              onClick={() => {
+                setCurrentStep(2);
+                scrollToTopSmoothly();
+              }}
               className="p-4 rounded-2xl bg-emerald-50/90 border border-emerald-200 flex items-center justify-between shadow-2xs cursor-pointer hover:bg-emerald-100/70 transition-colors"
             >
               <div className="flex items-center gap-3">

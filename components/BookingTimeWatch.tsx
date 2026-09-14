@@ -12,7 +12,6 @@ import {
   Sparkles,
   ChevronRight,
   Info,
-  Calendar,
   AlertTriangle,
   RotateCcw,
 } from 'lucide-react';
@@ -22,8 +21,6 @@ import {
   formatMinutesTo12Hour,
   calculateEndTime,
   inspectSlotAvailability,
-  formatContinuousHour,
-  SlotAvailabilityStatus,
 } from '@/lib/timing-helper';
 
 interface BookingTimeWatchProps {
@@ -83,7 +80,6 @@ export function BookingTimeWatch({
   const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>(initialParsed.period);
   const [activeDialMode, setActiveDialMode] = useState<'hour' | 'minute'>('hour');
   const [durationHours, setDurationHours] = useState<number>(initialDurationHours);
-  const [filterPeriod, setFilterPeriod] = useState<'all' | 'morning' | 'afternoon' | 'evening'>('all');
 
   // Bookings list for conflict calculation
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -245,79 +241,7 @@ export function BookingTimeWatch({
   ]);
 
   // ---------------------------------------------------------------------------
-  // 6. Configured Hours List for Grid / Strip (e.g. 6:00 AM to 2:00 AM)
-  // ---------------------------------------------------------------------------
-  const fullContinuousHoursList = useMemo(() => {
-    const normEnd = endOperatingHour <= startOperatingHour ? endOperatingHour + 24 : endOperatingHour;
-    const list: Array<{
-      continuousHour: number;
-      label: string;
-      startTimeStr: string;
-      startMinutes: number;
-      hour12: number;
-      period: 'AM' | 'PM';
-      status: SlotAvailabilityStatus;
-      reason?: string;
-    }> = [];
-
-    for (let ch = startOperatingHour; ch < normEnd; ch++) {
-      const timeLabel = formatContinuousHour(ch);
-      const startMin = ch * 60;
-      const hour12 = ch >= 24 ? (ch - 24 === 0 ? 12 : ch - 24) : ch === 0 ? 12 : ch > 12 ? ch - 12 : ch;
-      const period = ch >= 12 && ch < 24 ? ('PM' as const) : ('AM' as const);
-
-      const inspection = inspectSlotAvailability({
-        date: selectedDate,
-        startMinutes: startMin,
-        durationMinutes: 60,
-        operatingStartHour: startOperatingHour,
-        operatingEndHour: endOperatingHour,
-        resourceId: selectedResourceId,
-        sport: selectedSport,
-        bookings,
-        dateSpecificBlocks,
-        blockedHours,
-      });
-
-      list.push({
-        continuousHour: ch,
-        label: timeLabel,
-        startTimeStr: timeLabel,
-        startMinutes: startMin,
-        hour12,
-        period,
-        status: inspection.status,
-        reason: inspection.reason,
-      });
-    }
-
-    return list;
-  }, [
-    startOperatingHour,
-    endOperatingHour,
-    selectedDate,
-    selectedResourceId,
-    selectedSport,
-    bookings,
-    dateSpecificBlocks,
-    blockedHours,
-  ]);
-
-  // Filtered hours by user selection
-  const displayedHoursList = useMemo(() => {
-    if (filterPeriod === 'all') return fullContinuousHoursList;
-    if (filterPeriod === 'morning') {
-      return fullContinuousHoursList.filter((item) => item.continuousHour >= 6 && item.continuousHour < 12);
-    }
-    if (filterPeriod === 'afternoon') {
-      return fullContinuousHoursList.filter((item) => item.continuousHour >= 12 && item.continuousHour < 17);
-    }
-    // evening / night (5 PM to 2 AM next day)
-    return fullContinuousHoursList.filter((item) => item.continuousHour >= 17);
-  }, [fullContinuousHoursList, filterPeriod]);
-
-  // ---------------------------------------------------------------------------
-  // 7. Watch Dial Node Positions & Angles
+  // 6. Watch Dial Node Positions & Angles
   // ---------------------------------------------------------------------------
   // Dial radius and center coordinates
   const dialRadius = 106;
@@ -341,8 +265,8 @@ export function BookingTimeWatch({
     return hours.map((hourNum) => {
       const angleDeg = (hourNum % 12) * 30 - 90;
       const rad = (angleDeg * Math.PI) / 180;
-      const x = dialCenter + dialRadius * Math.cos(rad);
-      const y = dialCenter + dialRadius * Math.sin(rad);
+      const x = Math.round(dialCenter + dialRadius * Math.cos(rad));
+      const y = Math.round(dialCenter + dialRadius * Math.sin(rad));
 
       // Check availability of this hour for currently selected AM/PM
       let testContinuousHour = hourNum;
@@ -399,8 +323,8 @@ export function BookingTimeWatch({
     return minutes.map((m) => {
       const angleDeg = (m / 5) * 30 - 90;
       const rad = (angleDeg * Math.PI) / 180;
-      const x = dialCenter + dialRadius * Math.cos(rad);
-      const y = dialCenter + dialRadius * Math.sin(rad);
+      const x = Math.round(dialCenter + dialRadius * Math.cos(rad));
+      const y = Math.round(dialCenter + dialRadius * Math.sin(rad));
       const padM = m < 10 ? `0${m}` : `${m}`;
       return {
         minute: m,
@@ -599,8 +523,8 @@ export function BookingTimeWatch({
           <motion.div
             className="absolute z-20 pointer-events-none origin-bottom flex flex-col items-center justify-start"
             style={{
-              width: 36,
-              height: dialRadius + 18,
+              width: '36px',
+              height: `${dialRadius + 18}px`,
               bottom: '50%',
               left: 'calc(50% - 18px)',
             }}
@@ -634,8 +558,8 @@ export function BookingTimeWatch({
                     disabled={!isAvailable}
                     onClick={() => handleSelectHour(node.number)}
                     style={{
-                      left: node.x,
-                      top: node.y,
+                      left: `${node.x}px`,
+                      top: `${node.y}px`,
                       transform: 'translate(-50%, -50%)',
                     }}
                     className={`absolute z-30 w-9 h-9 rounded-full flex flex-col items-center justify-center font-bold text-xs transition-all duration-200 cursor-pointer ${
@@ -691,8 +615,8 @@ export function BookingTimeWatch({
                       setActiveDialMode('hour');
                     }}
                     style={{
-                      left: node.x,
-                      top: node.y,
+                      left: `${node.x}px`,
+                      top: `${node.y}px`,
                       transform: 'translate(-50%, -50%)',
                     }}
                     className={`absolute z-30 w-8 h-8 rounded-full flex items-center justify-center font-bold text-[11px] transition-all duration-200 cursor-pointer ${
@@ -845,142 +769,7 @@ export function BookingTimeWatch({
       </div>
 
       {/* ----------------------------------------------------------------- */}
-      {/* 4. FULL AVAILABLE TIMINGS STRIP & GRID (AS REQUESTED BY USER)     */}
-      {/* ----------------------------------------------------------------- */}
-      <div className="bg-white rounded-3xl border border-neutral-200/80 p-5 sm:p-6 shadow-md space-y-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <h4 className="text-sm font-black text-[#2C1A0E] flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-amber-700" />
-              <span>{isHindi ? 'सभी समय स्लॉट (All Operating Time Slots)' : 'Operating Time Slots'}</span>
-            </h4>
-            <p className="text-xs text-neutral-500">
-              {isHindi
-                ? 'किसी भी उपलब्ध स्लॉट पर क्लिक करके तुरंत समय चुन सकते हैं'
-                : 'Click any available time slot below to jump directly to it'}
-            </p>
-          </div>
-
-          {/* Filter Pills */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setFilterPeriod('all')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                filterPeriod === 'all'
-                  ? 'bg-[#2C1A0E] text-white'
-                  : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-              }`}
-            >
-              {isHindi ? 'सभी' : 'All'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterPeriod('morning')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                filterPeriod === 'morning'
-                  ? 'bg-[#2C1A0E] text-white'
-                  : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-              }`}
-            >
-              ☀️ {isHindi ? 'सुबह' : 'Morning'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterPeriod('afternoon')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                filterPeriod === 'afternoon'
-                  ? 'bg-[#2C1A0E] text-white'
-                  : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-              }`}
-            >
-              🌤️ {isHindi ? 'दोपहर' : 'Afternoon'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterPeriod('evening')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                filterPeriod === 'evening'
-                  ? 'bg-[#2C1A0E] text-white'
-                  : 'bg-neutral-100 text-neutral-700 hover:bg-neutral-200'
-              }`}
-            >
-              🌙 {isHindi ? 'शाम/रात' : 'Evening/Night'}
-            </button>
-          </div>
-        </div>
-
-        {/* Scrollable / Grid of All Operating Hours */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-72 overflow-y-auto pr-1">
-          {displayedHoursList.map((slot) => {
-            const isSelected =
-              selectedHour === slot.hour12 &&
-              selectedPeriod === slot.period &&
-              selectedMinute === 0;
-            const isAvailable = slot.status === 'AVAILABLE';
-            const isBooked = slot.status === 'BOOKED';
-            const isBlocked = slot.status === 'BLOCKED_BY_OWNER';
-
-            return (
-              <button
-                key={slot.label}
-                type="button"
-                disabled={!isAvailable}
-                onClick={() => {
-                  handleSelectHour(slot.hour12, slot.period);
-                  setSelectedMinute(0);
-                }}
-                className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${
-                  isSelected
-                    ? 'bg-[#2C1A0E] text-white border-[#2C1A0E] shadow-sm ring-2 ring-[#2C1A0E]/20'
-                    : isAvailable
-                    ? 'bg-neutral-50 hover:bg-emerald-50 hover:border-emerald-300 text-neutral-800 border-neutral-200 cursor-pointer'
-                    : isBooked
-                    ? 'bg-red-50/60 border-red-200 text-red-700 cursor-not-allowed opacity-80'
-                    : isBlocked
-                    ? 'bg-amber-50/60 border-amber-200 text-amber-800 cursor-not-allowed opacity-80'
-                    : 'bg-neutral-100 border-neutral-200 text-neutral-400 cursor-not-allowed opacity-50'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-xs font-mono">{slot.startTimeStr}</span>
-                  {isSelected && (
-                    <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
-                  )}
-                </div>
-
-                <div className="mt-1">
-                  {isAvailable ? (
-                    <span className={`text-[10px] font-extrabold flex items-center gap-1 ${
-                      isSelected ? 'text-emerald-300' : 'text-emerald-700'
-                    }`}>
-                      <span>✅</span>
-                      <span>{isHindi ? 'उपलब्ध' : 'Available'}</span>
-                    </span>
-                  ) : isBooked ? (
-                    <span className="text-[10px] font-extrabold text-red-600 flex items-center gap-1">
-                      <span>❌</span>
-                      <span>{isHindi ? 'बुक' : 'Booked'}</span>
-                    </span>
-                  ) : isBlocked ? (
-                    <span className="text-[10px] font-extrabold text-amber-700 flex items-center gap-1">
-                      <span>🔒</span>
-                      <span>{isHindi ? 'ब्लॉक' : 'Blocked by Owner'}</span>
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-neutral-400">
-                      {isHindi ? 'बंद' : 'Closed'}
-                    </span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ----------------------------------------------------------------- */}
-      {/* 5. SUMMARY TICKET & LIVE PRICE CARD                              */}
+      {/* 4. SUMMARY TICKET & LIVE PRICE CARD                              */}
       {/* ----------------------------------------------------------------- */}
       <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="space-y-1 text-center sm:text-left">

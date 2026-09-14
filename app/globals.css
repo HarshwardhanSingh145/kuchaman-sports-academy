@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+html {
+  scroll-behavior: smooth;
+}
+
 @layer base {
   :root {
     --font-agbalumo: 'Agbalumo', cursive, system-ui, sans-serif;
@@ -9,7 +13,14 @@
 
   body {
     font-family: 'Agbalumo', 'Plus Jakarta Sans', sans-serif;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
   }
+}
+
+.scroll-smooth {
+  scroll-behavior: smooth !important;
+  -webkit-overflow-scrolling: touch;
 }
 
 .font-agbalumo {
