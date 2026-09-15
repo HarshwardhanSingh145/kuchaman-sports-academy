@@ -76,6 +76,33 @@ export interface Booking {
   paymentMethod?: 'UPI_QR' | 'CASH' | 'ONLINE';
   verifiedAt?: string;
   verifiedBy?: string;
+
+  // Recurring Booking Extensions
+  booking_type?: 'one_time' | 'recurring';
+  recurrence_type?: 'weekly' | 'monthly' | 'preferred_time';
+  recurrence_days?: string[]; // e.g. ['Monday', 'Wednesday']
+  preferred_time?: string; // e.g. '07:00 PM – 08:00 PM'
+  start_date?: string; // YYYY-MM-DD
+  end_date?: string; // YYYY-MM-DD
+  duration?: number; // hours per session
+  total_sessions?: number; // Total number of individual sessions
+  recurring_price?: number; // Total price calculated for the recurring package
+  parent_booking_id?: string; // If this is an individual recurring session, points to master recurring booking
+  recurring_group_id?: string; // Shared unique group identifier across all linked sessions
+  is_parent_recurring?: boolean; // True if this record represents the master recurring booking
+  recurring_dates?: string[]; // List of all session dates (YYYY-MM-DD)
+}
+
+export interface RecurringPricingConfig {
+  weeklyCricketRatePerSession: number; // e.g. 900
+  weeklySwimmingRatePerSession: number; // e.g. 90
+  weeklyDiscountPercent: number; // e.g. 10%
+  monthlyCricketRatePerSession: number; // e.g. 800
+  monthlySwimmingRatePerSession: number; // e.g. 80
+  monthlyDiscountPercent: number; // e.g. 15%
+  preferredTimeCricketRatePerSession: number; // e.g. 900
+  preferredTimeSwimmingRatePerSession: number; // e.g. 90
+  preferredTimeDiscountPercent: number; // e.g. 10%
 }
 
 export interface HourlyRatesConfig {
@@ -136,12 +163,16 @@ export interface AcademyConfig {
   bankName?: string;
   paymentInstructions?: string;
   paymentNotes?: string;
+  // WhatsApp Notification & Verification Destination Number
+  ownerWhatsAppNumber?: string; // e.g. "8142731917" or "+91 81427 31917"
   // Special Event Discount Pop-up Configuration
   discountPopup?: DiscountPopupConfig;
   // Dynamic Hourly Rate Management
   hourlyRates?: HourlyRatesConfig;
   // Global & Date-specific Booking Timing Controls
   bookingTiming?: BookingTimingConfig;
+  // Recurring Booking Dynamic Pricing
+  recurringPricing?: RecurringPricingConfig;
 }
 
 // ----------------------------------------------------

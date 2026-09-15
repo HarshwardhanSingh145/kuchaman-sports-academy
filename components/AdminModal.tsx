@@ -34,6 +34,8 @@ import {
   Percent,
   Sparkles,
   ShieldAlert,
+  Phone,
+  MessageSquare,
 } from 'lucide-react';
 import { CricketNet, CricketSlot, SwimmingSession, Booking, AcademyConfig } from '@/lib/types';
 import { useFirebase } from '@/lib/FirebaseContext';
@@ -43,6 +45,9 @@ import { AdminHourlyRatesTab } from './AdminHourlyRatesTab';
 import { AdminBookingTimingTab } from './AdminBookingTimingTab';
 import { AdminBookingInfoTab } from './AdminBookingInfoTab';
 import { AdminPaymentVerificationTab } from './AdminPaymentVerificationTab';
+import { AdminRecurringBookingsTab } from './AdminRecurringBookingsTab';
+import { AdminRecurringPricingTab } from './AdminRecurringPricingTab';
+import { AdminWhatsAppSettingsTab } from './AdminWhatsAppSettingsTab';
 import { subscribeToBookings, subscribeToConfig } from '@/lib/firestore-service';
 
 interface AdminModalProps {
@@ -61,9 +66,10 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
 
   // Active Tab for focused Academy Admin controls
   const [activeTab, setActiveTab] = useState<
-    'payment_verification' | 'booking_info' | 'hourly_rates' | 'booking_timing' | 'discount_popup' | 'payment_setup' | 'nets_facilities'
+    'payment_verification' | 'whatsapp_settings' | 'recurring_bookings' | 'recurring_pricing' | 'booking_info' | 'hourly_rates' | 'booking_timing' | 'discount_popup' | 'payment_setup' | 'nets_facilities'
   >('booking_info');
   const [cricketSubView, setCricketSubView] = useState<'slots' | 'nets'>('slots');
+  const [academyConfig, setAcademyConfig] = useState<AcademyConfig | null>(null);
 
   // Config & Payment Settings State
   const [upiQrCodeUrl, setUpiQrCodeUrl] = useState('');
@@ -71,6 +77,7 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
   const [upiAccountName, setUpiAccountName] = useState('Kuchaman Sports Academy');
   const [bankName, setBankName] = useState('State Bank of India');
   const [paymentNotes, setPaymentNotes] = useState('Please share screenshot after payment');
+  const [ownerWhatsAppNumber, setOwnerWhatsAppNumber] = useState('8142731917');
   const [savingConfig, setSavingConfig] = useState(false);
   const [qrUploading, setQrUploading] = useState(false);
 
@@ -164,11 +171,17 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
       const configRes = await fetch('/api/admin/config');
       const configData = await configRes.json();
       if (configData.success && configData.config) {
+        setAcademyConfig(configData.config);
         setUpiQrCodeUrl(configData.config.upiQrCodeUrl || '');
         setUpiId(configData.config.upiId || '9829084421@paytm');
         setUpiAccountName(configData.config.upiAccountName || 'Kuchaman Sports Academy');
         setBankName(configData.config.bankName || 'State Bank of India');
         setPaymentNotes(configData.config.paymentNotes || 'Please upload payment proof screenshot after UPI payment.');
+        if (configData.config.ownerWhatsAppNumber) {
+          setOwnerWhatsAppNumber(configData.config.ownerWhatsAppNumber);
+        } else if (configData.config.phone) {
+          setOwnerWhatsAppNumber(configData.config.phone.replace(/\D/g, '').slice(-10) || '8142731917');
+        }
       }
     } catch (err) {
       console.error('Error loading admin data', err);
@@ -191,11 +204,12 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
           upiAccountName,
           bankName,
           paymentNotes,
+          ownerWhatsAppNumber,
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setActionMessage('QR Code and Payment setup saved successfully!');
+        setActionMessage('QR Code and WhatsApp Notification setup saved successfully!');
       } else {
         setActionMessage(data.error || 'Failed to save config');
       }
@@ -500,6 +514,18 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
           <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
             {isEffectiveAuth && (
               <button
+                type="button"
+                onClick={() => setActiveTab('whatsapp_settings')}
+                title="ओनर WhatsApp अलर्ट नंबर बदलें"
+                className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-emerald-800 hover:text-emerald-950 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300/80 cursor-pointer font-bold rounded-lg transition-colors"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="font-agbalumo">अलर्ट: +91 {ownerWhatsAppNumber.replace(/\D/g, '').slice(-10)}</span>
+                <span className="text-[10px] underline font-bold text-emerald-700">बदलें</span>
+              </button>
+            )}
+            {isEffectiveAuth && (
+              <button
                 onClick={loadAdminData}
                 title="Refresh Data"
                 disabled={loading}
@@ -667,6 +693,19 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
                   );
                 })()}
 
+                {/* Tab: WhatsApp Alert & Mobile Number */}
+                <button
+                  onClick={() => setActiveTab('whatsapp_settings')}
+                  className={`px-3 sm:px-4 py-2 text-xs font-agbalumo tracking-wide uppercase transition-all cursor-pointer border rounded-xl whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 ${
+                    activeTab === 'whatsapp_settings'
+                      ? 'bg-emerald-700 border-emerald-800 text-white font-black shadow-xs'
+                      : 'bg-emerald-50/80 border-emerald-300 text-emerald-900 hover:bg-emerald-100'
+                  }`}
+                >
+                  <MessageSquare className={`w-3.5 h-3.5 ${activeTab === 'whatsapp_settings' ? 'text-white' : 'text-emerald-700'}`} />
+                  <span>📲 WhatsApp अलर्ट नंबर</span>
+                </button>
+
                 {/* Tab 1: Booking Information */}
                 <button
                   onClick={() => setActiveTab('booking_info')}
@@ -678,6 +717,32 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
                 >
                   <CreditCard className="w-3.5 h-3.5 text-emerald-600" />
                   <span>📋 बुकिंग जानकारी (Booking Info)</span>
+                </button>
+
+                {/* Tab: Recurring Bookings */}
+                <button
+                  onClick={() => setActiveTab('recurring_bookings')}
+                  className={`px-3 sm:px-4 py-2 text-xs font-agbalumo tracking-wide uppercase transition-all cursor-pointer border rounded-xl whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 ${
+                    activeTab === 'recurring_bookings'
+                      ? 'bg-amber-100 border-amber-400 text-amber-950 font-bold shadow-xs'
+                      : 'bg-white/40 border-transparent text-[#7A5C4A] hover:text-[#2C1A0E] hover:bg-white/80'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5 text-blue-700" />
+                  <span>🔄 रिकरिंग बुकिंग (Recurring Bookings)</span>
+                </button>
+
+                {/* Tab: Recurring Pricing */}
+                <button
+                  onClick={() => setActiveTab('recurring_pricing')}
+                  className={`px-3 sm:px-4 py-2 text-xs font-agbalumo tracking-wide uppercase transition-all cursor-pointer border rounded-xl whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 ${
+                    activeTab === 'recurring_pricing'
+                      ? 'bg-amber-100 border-amber-400 text-amber-950 font-bold shadow-xs'
+                      : 'bg-white/40 border-transparent text-[#7A5C4A] hover:text-[#2C1A0E] hover:bg-white/80'
+                  }`}
+                >
+                  <Percent className="w-3.5 h-3.5 text-amber-700" />
+                  <span>💰 रिकरिंग दरें (Recurring Pricing)</span>
                 </button>
 
                 {/* Tab 2: Hourly Rate Control */}
@@ -729,7 +794,7 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
                   }`}
                 >
                   <QrCode className="w-3.5 h-3.5 text-[#8C5A32]" />
-                  <span>💳 QR व UPI सेटअप</span>
+                  <span>💳 QR, UPI व WhatsApp सेटअप</span>
                 </button>
 
                 {/* Tab 6: Turf & Nets Facilities */}
@@ -774,7 +839,26 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
             {/* Tab 0: Payment Verification Section */}
             {activeTab === 'payment_verification' && (
               <div className="p-3 sm:p-6 overflow-y-auto flex-1">
-                <AdminPaymentVerificationTab onRefresh={loadAdminData} />
+                <AdminPaymentVerificationTab
+                  onRefresh={loadAdminData}
+                  onNavigateToWhatsApp={() => setActiveTab('whatsapp_settings')}
+                  activeWhatsAppNumber={ownerWhatsAppNumber}
+                />
+              </div>
+            )}
+
+            {/* Tab: WhatsApp Alert & Owner Mobile Number */}
+            {activeTab === 'whatsapp_settings' && (
+              <div className="p-3 sm:p-6 overflow-y-auto flex-1">
+                <AdminWhatsAppSettingsTab
+                  currentNumber={ownerWhatsAppNumber}
+                  onSaved={(newNum) => {
+                    setOwnerWhatsAppNumber(newNum);
+                    setActionMessage(`✅ WhatsApp मोबाइल नंबर सफलतापूर्वक बदलकर +91 ${newNum} कर दिया गया है!`);
+                    loadAdminData();
+                    onDataChanged();
+                  }}
+                />
               </div>
             )}
 
@@ -782,6 +866,32 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
             {activeTab === 'booking_info' && (
               <div className="p-3 sm:p-6 overflow-y-auto flex-1">
                 <AdminBookingInfoTab onRefresh={loadAdminData} />
+              </div>
+            )}
+
+            {/* Tab: Recurring Bookings Management */}
+            {activeTab === 'recurring_bookings' && (
+              <div className="p-3 sm:p-6 overflow-y-auto flex-1 font-agbalumo">
+                <AdminRecurringBookingsTab
+                  config={academyConfig || ({} as any)}
+                  onDataChanged={() => {
+                    loadAdminData();
+                    onDataChanged();
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Tab: Recurring Pricing Control */}
+            {activeTab === 'recurring_pricing' && (
+              <div className="p-3 sm:p-6 overflow-y-auto flex-1 font-agbalumo">
+                <AdminRecurringPricingTab
+                  config={academyConfig || ({} as any)}
+                  onDataChanged={() => {
+                    loadAdminData();
+                    onDataChanged();
+                  }}
+                />
               </div>
             )}
 
@@ -1259,6 +1369,54 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
                         placeholder="e.g. Upload screenshot after completing UPI payment"
                         className="w-full px-3.5 py-2.5 bg-neutral-50 border border-neutral-300 rounded-lg text-xs text-[#2C1A0E] focus:outline-none focus:border-[#8C5A32]"
                       />
+                    </div>
+
+                    {/* Owner WhatsApp Notification Destination */}
+                    <div className="sm:col-span-2 pt-2 border-t border-neutral-100">
+                      <div className="bg-amber-50/60 p-3.5 rounded-xl border border-amber-200/80">
+                        <label className="block text-xs uppercase font-bold text-[#7A5C4A] mb-1 flex items-center gap-1.5">
+                          <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Academy Owner WhatsApp Number for Instant Alerts *</span>
+                        </label>
+                        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                          <div className="relative flex-1">
+                            <Phone className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="tel"
+                              required
+                              value={ownerWhatsAppNumber}
+                              onChange={(e) => setOwnerWhatsAppNumber(e.target.value)}
+                              placeholder="e.g. 8142731917 or +91 81427 31917"
+                              className="w-full pl-9 pr-3.5 py-2 bg-white border border-neutral-300 rounded-lg text-xs font-mono font-bold text-[#2C1A0E] focus:outline-none focus:border-[#8C5A32]"
+                            />
+                          </div>
+                          {ownerWhatsAppNumber && (
+                            <a
+                              href={`https://wa.me/91${ownerWhatsAppNumber.replace(/\D/g, '').slice(-10)}?text=${encodeURIComponent(
+                                'नमस्ते, कुचामन स्पोर्ट्स एकेडमी (KSA) का WhatsApp टेस्ट नोटिफिकेशन सक्रिय है।'
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 whitespace-nowrap shadow-xs transition-colors"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>Test Link (टेस्ट करें)</span>
+                            </a>
+                          )}
+                        </div>
+                        <div className="mt-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <p className="text-[11px] text-stone-600 leading-relaxed">
+                            📲 जब भी कोई खिलाड़ी UPI से स्लॉट बुक करेगा, तो तुरंत इस नंबर पर व्हाट्सएप अलर्ट और 1-क्लिक अप्रूवल का डायरेक्ट लिंक भेजा जाएगा।
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('whatsapp_settings')}
+                            className="text-xs font-bold text-emerald-800 hover:text-emerald-950 underline flex items-center gap-1 shrink-0 cursor-pointer"
+                          >
+                            <span>विस्तृत WhatsApp सेटिंग्स पेज →</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 

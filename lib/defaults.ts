@@ -10,6 +10,7 @@ import {
   Certificate,
   SignatureConfig,
   AuditLog,
+  RecurringPricingConfig,
 } from './types';
 
 // Initial Nets Configuration (4 Practice Nets with Max 4 Players + 1 Special Cricket/football/Hockey big box turf Net)
@@ -162,7 +163,7 @@ export const DEFAULT_CONFIG: AcademyConfig = {
   shortName: 'KSA',
   location: 'Kuchaman City, Didwana-Kuchaman, Rajasthan 341508',
   address: 'Near Stadium Bypass Road, Kuchaman City, Rajasthan',
-  phone: '+91 98290 84421',
+  phone: '+91 81427 31917',
   email: 'info@kuchamansports.in',
   operatingHours: '06:00 AM – 02:00 AM (Monday – Sunday)',
   disabledDates: [],
@@ -171,6 +172,7 @@ export const DEFAULT_CONFIG: AcademyConfig = {
   bankName: 'State Bank of India',
   paymentInstructions: 'Please upload payment proof screenshot after UPI payment.',
   paymentNotes: 'Please upload payment proof screenshot after UPI payment.',
+  ownerWhatsAppNumber: '8142731917',
   upiQrCodeUrl: '',
   hourlyRates: {
     cricketBigBox: 1000,
@@ -199,6 +201,29 @@ export const DEFAULT_CONFIG: AcademyConfig = {
     ctaAction: 'booking',
     displayDelaySeconds: 1,
   },
+  recurringPricing: {
+    weeklyCricketRatePerSession: 900,
+    weeklySwimmingRatePerSession: 90,
+    weeklyDiscountPercent: 10,
+    monthlyCricketRatePerSession: 800,
+    monthlySwimmingRatePerSession: 80,
+    monthlyDiscountPercent: 15,
+    preferredTimeCricketRatePerSession: 900,
+    preferredTimeSwimmingRatePerSession: 90,
+    preferredTimeDiscountPercent: 10,
+  },
+};
+
+export const DEFAULT_RECURRING_PRICING: RecurringPricingConfig = {
+  weeklyCricketRatePerSession: 900,
+  weeklySwimmingRatePerSession: 90,
+  weeklyDiscountPercent: 10,
+  monthlyCricketRatePerSession: 800,
+  monthlySwimmingRatePerSession: 80,
+  monthlyDiscountPercent: 15,
+  preferredTimeCricketRatePerSession: 900,
+  preferredTimeSwimmingRatePerSession: 90,
+  preferredTimeDiscountPercent: 10,
 };
 
 export const DEFAULT_OWNER_SIGNATURE = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 90" width="300" height="90"><path d="M25,55 C45,20 60,65 75,35 C90,15 100,50 115,40 C130,30 145,55 160,35 C175,25 200,60 220,40 C240,25 260,50 280,35 M50,65 L270,55" fill="none" stroke="%231a365d" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><text x="45" y="80" font-family="'Brush Script MT', cursive, sans-serif" font-size="16" fill="%231a365d">Jay Prakash Bhakar</text></svg>`;

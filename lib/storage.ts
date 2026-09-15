@@ -302,6 +302,9 @@ export class StorageService {
     if (!runtimeData.config.discountPopup) {
       runtimeData.config.discountPopup = DEFAULT_CONFIG.discountPopup;
     }
+    if (!runtimeData.config.recurringPricing) {
+      runtimeData.config.recurringPricing = DEFAULT_CONFIG.recurringPricing;
+    }
     return runtimeData.config;
   }
 
@@ -320,6 +323,10 @@ export class StorageService {
       discountPopup: {
         ...(runtimeData.config.discountPopup || DEFAULT_CONFIG.discountPopup!),
         ...(config.discountPopup || {}),
+      },
+      recurringPricing: {
+        ...(runtimeData.config.recurringPricing || DEFAULT_CONFIG.recurringPricing!),
+        ...(config.recurringPricing || {}),
       },
     };
     saveToFile();
@@ -696,6 +703,18 @@ export class StorageService {
     const booking = runtimeData.bookings.find((b) => b.id === bookingId);
     if (!booking) return null;
     booking.status = status;
+
+    // Cascade to child sessions if this is a recurring master booking
+    if (booking.is_parent_recurring || booking.booking_type === 'recurring') {
+      const childBookings = runtimeData.bookings.filter(
+        (b) => b.parent_booking_id === bookingId || (b.recurring_group_id && b.recurring_group_id === booking.recurring_group_id && b.id !== bookingId)
+      );
+      childBookings.forEach((child) => {
+        child.status = status;
+        updateFirestoreBookingStatus(child.id, status).catch(() => {});
+      });
+    }
+
     saveToFile();
     updateFirestoreBookingStatus(bookingId, status).catch((e) =>
       console.warn('[Firestore] Update booking status notice:', e)
@@ -721,6 +740,25 @@ export class StorageService {
     }
     booking.verifiedAt = new Date().toISOString();
     if (verifiedBy) booking.verifiedBy = verifiedBy;
+
+    // Cascade approval/rejection to child sessions if this is a recurring master booking
+    if (booking.is_parent_recurring || booking.booking_type === 'recurring') {
+      const childBookings = runtimeData.bookings.filter(
+        (b) => b.parent_booking_id === bookingId || (b.recurring_group_id && b.recurring_group_id === booking.recurring_group_id && b.id !== bookingId)
+      );
+      childBookings.forEach((child) => {
+        child.paymentStatus = paymentStatus;
+        child.status = booking.status;
+        child.verifiedAt = booking.verifiedAt;
+        if (verifiedBy) child.verifiedBy = verifiedBy;
+        updateFirestoreBookingStatus(child.id, child.status, {
+          paymentStatus,
+          verifiedAt: booking.verifiedAt,
+          verifiedBy,
+        }).catch(() => {});
+      });
+    }
+
     saveToFile();
     updateFirestoreBookingStatus(bookingId, booking.status, {
       paymentStatus,
@@ -732,12 +770,174 @@ export class StorageService {
 
   static deleteBooking(bookingId: string): boolean {
     const initialLen = runtimeData.bookings.length;
-    runtimeData.bookings = runtimeData.bookings.filter((b) => b.id !== bookingId);
+    const target = runtimeData.bookings.find((b) => b.id === bookingId);
+
+    // If master recurring booking, delete all linked child sessions as well
+    if (target?.is_parent_recurring || target?.booking_type === 'recurring') {
+      const childIds = runtimeData.bookings
+        .filter((b) => b.parent_booking_id === bookingId || (target.recurring_group_id && b.recurring_group_id === target.recurring_group_id && b.id !== bookingId))
+        .map((b) => b.id);
+      childIds.forEach((cId) => deleteFirestoreBooking(cId).catch(() => {}));
+      runtimeData.bookings = runtimeData.bookings.filter(
+        (b) => b.id !== bookingId && b.parent_booking_id !== bookingId && (!target.recurring_group_id || b.recurring_group_id !== target.recurring_group_id)
+      );
+    } else {
+      runtimeData.bookings = runtimeData.bookings.filter((b) => b.id !== bookingId);
+    }
+
     saveToFile();
     deleteFirestoreBooking(bookingId).catch((e) =>
       console.warn('[Firestore] Delete booking notice:', e)
     );
     return runtimeData.bookings.length < initialLen;
+  }
+
+  // =========================================================================
+  // RECURRING BOOKING MANAGEMENT
+  // =========================================================================
+
+  static createRecurringBooking(input: {
+    sport: 'cricket' | 'swimming';
+    category?: string;
+    resourceId: string;
+    resourceName: string;
+    recurrence_type: 'weekly' | 'monthly' | 'preferred_time';
+    recurrence_days: string[];
+    preferred_time: string;
+    startTime?: string;
+    endTime?: string;
+    duration?: number;
+    start_date: string;
+    end_date: string;
+    recurring_dates: string[];
+    userName: string;
+    userPhone: string;
+    userEmail?: string;
+    playerCount?: number;
+    notes?: string;
+    amountPaid: number;
+    recurring_price: number;
+    paymentMethod?: 'UPI_QR' | 'CASH' | 'ONLINE';
+    paymentScreenshot?: string;
+    transactionId?: string;
+    paymentStatus?: 'PENDING_VERIFICATION' | 'APPROVED' | 'REJECTED';
+    status?: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'AWAITING_VERIFICATION' | 'PAYMENT_VERIFICATION_FAILED';
+  }): { success: boolean; parentBooking?: Booking; sessions?: Booking[]; error?: string } {
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const parentId = `KSA-REC-${randomNum}`;
+    const groupId = `GRP-${parentId}`;
+    const createdAt = new Date().toISOString();
+
+    const isPending = input.paymentStatus !== 'APPROVED';
+    const bookingStatus = input.status || (isPending ? 'AWAITING_VERIFICATION' : 'CONFIRMED');
+    const payStatus = input.paymentStatus || 'PENDING_VERIFICATION';
+
+    // 1. Create Master Parent Recurring Booking
+    const parentBooking: Booking = {
+      id: parentId,
+      sport: input.sport,
+      category: input.category || (input.sport === 'cricket' ? 'cricket_bigbox' : 'swimming'),
+      resourceId: input.resourceId,
+      resourceName: input.resourceName,
+      date: input.start_date,
+      timeRange: input.preferred_time,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      durationHours: input.duration || 1,
+      duration: input.duration || 1,
+      userName: input.userName.trim(),
+      userPhone: input.userPhone.trim(),
+      userEmail: input.userEmail?.trim(),
+      playerCount: input.playerCount || 1,
+      notes: input.notes?.trim(),
+      status: bookingStatus,
+      paymentStatus: payStatus,
+      amountPaid: input.amountPaid,
+      recurring_price: input.recurring_price,
+      paymentMethod: input.paymentMethod || 'UPI_QR',
+      paymentScreenshot: input.paymentScreenshot,
+      transactionId: input.transactionId,
+      createdAt,
+      booking_type: 'recurring',
+      is_parent_recurring: true,
+      recurrence_type: input.recurrence_type,
+      recurrence_days: input.recurrence_days,
+      preferred_time: input.preferred_time,
+      start_date: input.start_date,
+      end_date: input.end_date,
+      total_sessions: input.recurring_dates.length,
+      recurring_dates: input.recurring_dates,
+      recurring_group_id: groupId,
+    };
+
+    // 2. Generate Individual Session Bookings
+    const sessionBookings: Booking[] = input.recurring_dates.map((sessionDate, idx) => ({
+      id: `${parentId}-S${String(idx + 1).padStart(2, '0')}`,
+      sport: input.sport,
+      category: input.category || (input.sport === 'cricket' ? 'cricket_bigbox' : 'swimming'),
+      resourceId: input.resourceId,
+      resourceName: input.resourceName,
+      date: sessionDate,
+      timeRange: input.preferred_time,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      durationHours: input.duration || 1,
+      userName: input.userName.trim(),
+      userPhone: input.userPhone.trim(),
+      userEmail: input.userEmail?.trim(),
+      playerCount: input.playerCount || 1,
+      notes: `Session ${idx + 1} of ${input.recurring_dates.length} (${input.recurrence_type} recurring)`,
+      status: bookingStatus,
+      paymentStatus: payStatus,
+      amountPaid: Math.round(input.amountPaid / Math.max(1, input.recurring_dates.length)),
+      paymentMethod: input.paymentMethod || 'UPI_QR',
+      createdAt,
+      booking_type: 'recurring',
+      parent_booking_id: parentId,
+      recurring_group_id: groupId,
+      is_parent_recurring: false,
+    }));
+
+    // Add all to storage
+    runtimeData.bookings.push(parentBooking);
+    sessionBookings.forEach((sb) => runtimeData.bookings.push(sb));
+    saveToFile();
+
+    // Sync all to Firestore
+    createFirestoreBooking(parentBooking).catch(() => {});
+    sessionBookings.forEach((sb) => createFirestoreBooking(sb).catch(() => {}));
+
+    return {
+      success: true,
+      parentBooking,
+      sessions: sessionBookings,
+    };
+  }
+
+  static getRecurringBookings(phone?: string): Booking[] {
+    return runtimeData.bookings.filter((b) => {
+      const isRecurring = b.is_parent_recurring === true || (b.booking_type === 'recurring' && !b.parent_booking_id);
+      if (!isRecurring) return false;
+      if (phone && !b.userPhone.includes(phone.replace(/\D/g, ''))) return false;
+      return true;
+    });
+  }
+
+  static getRecurringSessions(parentBookingId: string): Booking[] {
+    return runtimeData.bookings.filter((b) => b.parent_booking_id === parentBookingId);
+  }
+
+  static updateRecurringSession(
+    sessionId: string,
+    updates: Partial<Booking>
+  ): Booking | null {
+    const session = runtimeData.bookings.find((b) => b.id === sessionId);
+    if (!session) return null;
+
+    Object.assign(session, updates);
+    saveToFile();
+    updateFirestoreBookingStatus(sessionId, session.status, updates).catch(() => {});
+    return session;
   }
 
   // =========================================================================

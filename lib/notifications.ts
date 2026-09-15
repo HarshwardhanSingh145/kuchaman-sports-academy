@@ -30,29 +30,86 @@ export interface NotificationResult {
   whatsappLink: string;
 }
 
-const DEFAULT_OWNER_WHATSAPP = '919829084421'; // KSA Director Contact: 9829084421
+// Owner WhatsApp Number as default fallback: 8142731917
+const DEFAULT_OWNER_WHATSAPP = '918142731917';
 
 /**
- * Build the exact verification notification message required by KSA
+ * Resolves the active owner WhatsApp phone number dynamically.
+ * Priority:
+ * 1. Explicitly passed customPhone
+ * 2. Stored configuration in StorageService (set in Admin)
+ * 3. WHATSAPP_OWNER_NUMBER environment variable
+ * 4. DEFAULT_OWNER_WHATSAPP (8142731917)
  */
-export function buildOwnerVerificationMessage(booking: BookingNotificationDetails): string {
+export function resolveOwnerWhatsApp(customPhone?: string): string {
+  if (customPhone && customPhone.trim()) {
+    return customPhone.trim();
+  }
+  return process.env.WHATSAPP_OWNER_NUMBER || DEFAULT_OWNER_WHATSAPP;
+}
+
+/**
+ * Generate a deterministic verification signature token for one-click verification
+ */
+export function generateVerificationToken(bookingId: string): string {
+  const secret = process.env.VERIFICATION_SECRET || 'ksa_owner_whatsapp_secret_salt_2026';
+  let hash = 0;
+  const str = `${bookingId}_${secret}`;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+/**
+ * Validate a verification signature token
+ */
+export function isValidVerificationToken(bookingId: string, token: string): boolean {
+  if (!bookingId || !token) return false;
+  return generateVerificationToken(bookingId) === token.trim();
+}
+
+/**
+ * Build the exact verification notification message required by KSA with 1-Click YES / NO links
+ */
+export function buildOwnerVerificationMessage(
+  booking: BookingNotificationDetails,
+  baseUrl?: string
+): string {
   const sportLabel = booking.sport ? booking.sport.toUpperCase() : 'SPORTS';
   const resourceLabel = booking.resourceName ? ` (${booking.resourceName})` : '';
+  const token = generateVerificationToken(booking.id);
+
+  const origin =
+    baseUrl ||
+    (typeof window !== 'undefined'
+      ? window.location.origin
+      : process.env.NEXT_PUBLIC_APP_URL || 'https://ais-dev-2c2mifsqqifvreyllk6nht-554160794174.asia-southeast1.run.app');
+
+  const cleanOrigin = origin.replace(/\/$/, '');
+  const yesLink = `${cleanOrigin}/verify-booking?id=${encodeURIComponent(booking.id)}&action=approve&token=${token}`;
+  const noLink = `${cleanOrigin}/verify-booking?id=${encodeURIComponent(booking.id)}&action=reject&token=${token}`;
 
   return (
-    `🔔 *New Payment Verification Required*\n\n` +
-    `A new customer has submitted a booking after the UPI payment flow.\n\n` +
-    `*Customer:* ${booking.userName} (${booking.userPhone})\n` +
-    `*Amount:* ₹${booking.amountPaid}\n` +
-    `*Booking ID:* ${booking.id}\n` +
-    `*Sport:* ${sportLabel}${resourceLabel}\n` +
-    `*Date:* ${booking.date}\n` +
-    `*Booking Time:* ${booking.timeRange || 'Selected slot'}\n` +
-    (booking.transactionId ? `*Transaction / UTR:* ${booking.transactionId}\n` : '') +
-    `\n*Action Required:*\n` +
-    `"Please check your bank/UPI account to confirm whether this payment has actually been received."\n` +
-    `"If the payment has been received, open the Admin Panel → Payment Verification and approve the booking."\n` +
-    `"Do not approve the booking unless the payment is actually visible in your bank/UPI transaction history."`
+    `🔔 *नया बुकिंग व पेमेंट अनुरोध (KSA)*\n\n` +
+    `👤 *ग्राहक का नाम:* ${booking.userName}\n` +
+    `📱 *मोबाइल नंबर:* ${booking.userPhone}\n` +
+    `⏰ *तारीख व समय:* ${booking.date} (${booking.timeRange || 'चयनित स्लॉट'})\n` +
+    `🏏 *खेल / सुविधा:* ${sportLabel}${resourceLabel}\n` +
+    `💰 *भुगतान राशि:* ₹${booking.amountPaid}\n` +
+    `🆔 *बुकिंग ID:* ${booking.id}\n` +
+    (booking.transactionId ? `🔢 *UTR / Ref No:* ${booking.transactionId}\n` : '') +
+    `\n📢 *सूचना:* इस नाम (*${booking.userName}*) के बंदे ने इस टाइम पर *₹${booking.amountPaid}* का पेमेंट सबमिट किया है।\n\n` +
+    `⚠️ *कृपया अपने बैंक खाते / PhonePe / GPay में चेक करें कि क्या ₹${booking.amountPaid} सच में आ गए हैं?*\n\n` +
+    `━━━━━━━━━━━━━━━━━━━\n` +
+    `👇 *फैसला लें (1-क्लिक वेरिफिकेशन):*\n\n` +
+    `✅ *YES (पेमेंट आ गया है - कन्फर्म करें):*\n` +
+    `${yesLink}\n\n` +
+    `❌ *NO (पेमेंट नहीं आया - रिजेक्ट करें):*\n` +
+    `${noLink}\n` +
+    `━━━━━━━━━━━━━━━━━━━\n` +
+    `💡 *नोट:* आपके Yes या No पर क्लिक करते ही वेबसाइट पर यह बुकिंग तुरंत कन्फर्म या रिजेक्ट हो जाएगी।`
   );
 }
 
@@ -61,14 +118,15 @@ export function buildOwnerVerificationMessage(booking: BookingNotificationDetail
  */
 export function generateOwnerWhatsAppLink(
   bookingOrText: BookingNotificationDetails | string,
-  customPhone?: string
+  customPhone?: string,
+  baseUrl?: string
 ): string {
   const messageText =
     typeof bookingOrText === 'string'
       ? bookingOrText
-      : buildOwnerVerificationMessage(bookingOrText);
-  const phone = (customPhone || process.env.WHATSAPP_OWNER_NUMBER || DEFAULT_OWNER_WHATSAPP)
-    .replace(/\D/g, '');
+      : buildOwnerVerificationMessage(bookingOrText, baseUrl);
+  const rawPhone = resolveOwnerWhatsApp(customPhone);
+  const phone = rawPhone.replace(/\D/g, '');
   const normalizedPhone = phone.startsWith('91') && phone.length === 12 ? phone : `91${phone.slice(-10)}`;
   return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(messageText)}`;
 }
@@ -77,14 +135,17 @@ export function generateOwnerWhatsAppLink(
  * Send notification to the owner immediately upon verification submission
  */
 export async function notifyOwnerOfPendingVerification(
-  booking: BookingNotificationDetails
+  booking: BookingNotificationDetails,
+  baseUrl?: string,
+  customOwnerPhone?: string
 ): Promise<NotificationResult> {
-  const messageText = buildOwnerVerificationMessage(booking);
-  const whatsappLink = generateOwnerWhatsAppLink(messageText);
+  const resolvedPhone = resolveOwnerWhatsApp(customOwnerPhone);
+  const messageText = buildOwnerVerificationMessage(booking, baseUrl);
+  const whatsappLink = generateOwnerWhatsAppLink(messageText, resolvedPhone, baseUrl);
 
   const token = process.env.WHATSAPP_API_TOKEN;
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const toPhone = (process.env.WHATSAPP_OWNER_NUMBER || DEFAULT_OWNER_WHATSAPP).replace(/\D/g, '');
+  const toPhone = resolvedPhone.replace(/\D/g, '');
   const normalizedToPhone = toPhone.startsWith('91') && toPhone.length === 12 ? toPhone : `91${toPhone.slice(-10)}`;
 
   // Safe Check: If WhatsApp Cloud API is configured in environment

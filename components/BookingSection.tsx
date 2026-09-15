@@ -43,6 +43,7 @@ import { BookingTimeWatch } from '@/components/BookingTimeWatch';
 import { subscribeToConfig, createFirestoreBooking, subscribeToBookings } from '@/lib/firestore-service';
 import { buildOwnerVerificationMessage, generateOwnerWhatsAppLink } from '@/lib/notifications';
 import { TermsModal } from '@/components/TermsModal';
+import { RecurringBookingSection } from '@/components/RecurringBookingSection';
 
 export type BookingCategory = 'cricket' | 'swimming' | 'admission';
 
@@ -66,6 +67,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
   // ---------------------------------------------------------------------------
   // 1. Core Category & Active Step State
   // ---------------------------------------------------------------------------
+  const [bookingMode, setBookingMode] = useState<'standard' | 'recurring'>('standard');
   const [category, setCategory] = useState<BookingCategory>(initialSport);
   // Current active step: 1 (Selection/Details), 2 (Details/Payment), 3 (Payment for 3-step flows)
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -226,6 +228,23 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
       if (match) {
         if (match.status === 'CONFIRMED' && match.paymentStatus === 'APPROVED') {
           setVerificationStatus('CONFIRMED');
+          setConfirmedBooking({
+            id: match.id,
+            category: match.sport || 'cricket',
+            title: match.resourceName || 'Kuchaman Sports Academy',
+            details: `${match.playerCount || 1} Players • ${match.durationHours || 1} Hours`,
+            dateTime: `${match.date} • ${match.timeRange}`,
+            personName: match.userName,
+            contactNumber: match.userPhone,
+            count: match.playerCount || 1,
+            originalPrice: match.originalAmount || match.amountPaid || 0,
+            discountAmount: match.discountAmount || 0,
+            finalPaid: match.amountPaid || 0,
+            transactionId: match.transactionId,
+          });
+          try {
+            sessionStorage.removeItem('ksa_pending_verification_booking');
+          } catch {}
           try {
             confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
           } catch {}
@@ -238,7 +257,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
       }
     });
 
-    // Periodic polling fallback every 3.5 seconds
+    // Periodic polling fallback every 3 seconds
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/bookings/${encodeURIComponent(targetId)}`);
@@ -248,6 +267,26 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
             const b = data.booking;
             if (b.status === 'CONFIRMED' && b.paymentStatus === 'APPROVED') {
               setVerificationStatus('CONFIRMED');
+              setConfirmedBooking({
+                id: b.id,
+                category: b.sport || 'cricket',
+                title: b.resourceName || 'Kuchaman Sports Academy',
+                details: `${b.playerCount || 1} Players • ${b.durationHours || 1} Hours`,
+                dateTime: `${b.date} • ${b.timeRange}`,
+                personName: b.userName,
+                contactNumber: b.userPhone,
+                count: b.playerCount || 1,
+                originalPrice: b.originalAmount || b.amountPaid || 0,
+                discountAmount: b.discountAmount || 0,
+                finalPaid: b.amountPaid || 0,
+                transactionId: b.transactionId,
+              });
+              try {
+                sessionStorage.removeItem('ksa_pending_verification_booking');
+              } catch {}
+              try {
+                confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+              } catch {}
             } else if (
               b.status === 'PAYMENT_VERIFICATION_FAILED' ||
               b.paymentStatus === 'REJECTED'
@@ -257,7 +296,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
           }
         }
       } catch {}
-    }, 3500);
+    }, 3000);
 
     return () => {
       unsubscribe();
@@ -842,17 +881,23 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
   // 6.5 Render: Pending Verification or Failed Verification Screen
   // ---------------------------------------------------------------------------
   if (submittedVerificationBooking && !confirmedBooking) {
-    const ownerWhatsAppLink = generateOwnerWhatsAppLink({
-      id: submittedVerificationBooking.id,
-      userName: submittedVerificationBooking.userName,
-      userPhone: submittedVerificationBooking.userPhone,
-      amountPaid: submittedVerificationBooking.amountPaid || 0,
-      sport: submittedVerificationBooking.sport,
-      resourceName: submittedVerificationBooking.resourceName,
-      date: submittedVerificationBooking.date,
-      timeRange: submittedVerificationBooking.timeRange,
-      transactionId: submittedVerificationBooking.transactionId,
-    });
+    const currentOwnerNumber = ownerConfig.ownerWhatsAppNumber || ownerConfig.phone || '8142731917';
+    const cleanDisplayNumber = currentOwnerNumber.replace(/\D/g, '').slice(-10) || '8142731917';
+
+    const ownerWhatsAppLink = generateOwnerWhatsAppLink(
+      {
+        id: submittedVerificationBooking.id,
+        userName: submittedVerificationBooking.userName,
+        userPhone: submittedVerificationBooking.userPhone,
+        amountPaid: submittedVerificationBooking.amountPaid || 0,
+        sport: submittedVerificationBooking.sport,
+        resourceName: submittedVerificationBooking.resourceName,
+        date: submittedVerificationBooking.date,
+        timeRange: submittedVerificationBooking.timeRange,
+        transactionId: submittedVerificationBooking.transactionId,
+      },
+      currentOwnerNumber
+    );
 
     const isPending = verificationStatus === 'AWAITING_VERIFICATION';
     const isFailed = verificationStatus === 'PAYMENT_VERIFICATION_FAILED';
@@ -871,15 +916,15 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 <Clock className="w-8 h-8 text-amber-100 animate-pulse" />
               </div>
               <span className="inline-block px-3 py-1 rounded-full bg-white/20 text-xs font-black tracking-wider uppercase mb-1.5">
-                {isHindi ? 'सत्यापन प्रक्रियाधीन • PENDING' : 'Awaiting Payment Verification'}
+                {isHindi ? 'बुकिंग शेड्यूल्ड • सत्यापन प्रतीक्षित' : 'Booking Scheduled • Awaiting Owner Approval'}
               </span>
               <h2 className="text-2xl sm:text-3xl font-black font-agbalumo text-white">
-                {isHindi ? 'बुकिंग अनुरोध सबमिट किया गया' : 'Booking Request Submitted'}
+                {isHindi ? 'बुकिंग शेड्यूल्ड (Booking Scheduled)' : 'Booking Scheduled'}
               </h2>
               <p className="text-xs sm:text-sm text-amber-100/90 mt-2 max-w-md mx-auto leading-relaxed">
                 {isHindi
-                  ? 'आपका भुगतान एकैडमी द्वारा सत्यापित किया जा रहा है। भुगतान सफलतापूर्वक सत्यापित होने के बाद हम आपसे संपर्क करेंगे।'
-                  : 'Your payment is being verified by the academy. We will contact you once your payment has been successfully verified.'}
+                  ? `आपकी बुकिंग शेड्यूल कर ली गई है! इस नाम (${submittedVerificationBooking.userName}) के ग्राहक ने इस समय (${submittedVerificationBooking.timeRange || 'स्लॉट'}) के लिए ₹${submittedVerificationBooking.amountPaid} का भुगतान सबमिट किया है। ओनर (${cleanDisplayNumber}) द्वारा व्हाट्सएप पर "YES" करते ही यह तुरंत लाइव कन्फर्म हो जाएगी।`
+                  : `Your booking is scheduled! Customer ${submittedVerificationBooking.userName} has submitted ₹${submittedVerificationBooking.amountPaid} for ${submittedVerificationBooking.timeRange || 'slot'}. It will be confirmed once owner (${cleanDisplayNumber}) clicks YES on WhatsApp.`}
               </p>
             </div>
           ) : isFailed ? (
@@ -1028,18 +1073,18 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 <Share2 className="w-4 h-4" />
                 <span>
                   {isHindi
-                    ? '📲 एकैडमी ओनर को व्हाट्सएप पर सूचित करें (Notify Owner)'
-                    : '📲 Notify Academy Owner on WhatsApp'}
+                    ? `📲 एकैडमी ओनर (${cleanDisplayNumber}) को व्हाट्सएप पर भेजें`
+                    : `📲 Send Request to Owner on WhatsApp (${cleanDisplayNumber})`}
                 </span>
               </a>
 
               <div className="grid grid-cols-2 gap-2.5">
                 <a
-                  href="tel:9829084421"
+                  href={`tel:${cleanDisplayNumber}`}
                   className="h-11 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-98"
                 >
                   <Phone className="w-3.5 h-3.5 text-neutral-600" />
-                  <span>{isHindi ? 'कॉल करें: 9829084421' : 'Call 9829084421'}</span>
+                  <span>{isHindi ? `कॉल करें: ${cleanDisplayNumber}` : `Call ${cleanDisplayNumber}`}</span>
                 </a>
                 <button
                   type="button"
@@ -1208,8 +1253,44 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
         </p>
       </div>
 
-      {/* Category Segmented Pills (Thumb-friendly iOS/Android Switcher) */}
-      <div className="bg-neutral-200/70 p-1.5 rounded-2xl flex items-center gap-1 mb-5 border border-neutral-300/60 shadow-inner">
+      {/* Primary Booking Mode Selector (One-Time vs Recurring) */}
+      <div className="bg-neutral-200/80 p-1.5 rounded-2xl flex items-center gap-1.5 mb-5 border border-neutral-300/80 shadow-inner">
+        <button
+          type="button"
+          onClick={() => setBookingMode('standard')}
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            bookingMode === 'standard'
+              ? 'bg-[#2C1A0E] text-white shadow-md'
+              : 'text-neutral-700 hover:text-black hover:bg-white/50'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>{isHindi ? 'सामान्य बुकिंग (One-Time)' : 'One-Time Booking'}</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setBookingMode('recurring')}
+          className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            bookingMode === 'recurring'
+              ? 'bg-[#2C1A0E] text-white shadow-md'
+              : 'text-neutral-700 hover:text-black hover:bg-white/50'
+          }`}
+        >
+          <RotateCcw className="w-3.5 h-3.5 text-amber-300" />
+          <span>{isHindi ? '🔄 नियमित बुकिंग (Recurring)' : '🔄 Recurring Booking'}</span>
+          <span className="ml-1 px-1.5 py-0.5 rounded-md bg-amber-400 text-neutral-950 text-[10px] font-black uppercase">
+            New
+          </span>
+        </button>
+      </div>
+
+      {bookingMode === 'recurring' ? (
+        <RecurringBookingSection onBackToOneTime={() => setBookingMode('standard')} />
+      ) : (
+        <>
+          {/* Category Segmented Pills (Thumb-friendly iOS/Android Switcher) */}
+          <div className="bg-neutral-200/70 p-1.5 rounded-2xl flex items-center gap-1 mb-5 border border-neutral-300/60 shadow-inner">
         <button
           type="button"
           onClick={() => handleCategorySwitch('cricket')}
@@ -2570,6 +2651,8 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
             </motion.div>
           )}
         </div>
+      )}
+        </>
       )}
 
       {/* Full Terms & Conditions Modal */}

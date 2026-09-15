@@ -25,9 +25,15 @@ import { subscribeToBookings } from '@/lib/firestore-service';
 
 interface AdminPaymentVerificationTabProps {
   onRefresh?: () => void;
+  onNavigateToWhatsApp?: () => void;
+  activeWhatsAppNumber?: string;
 }
 
-export function AdminPaymentVerificationTab({ onRefresh }: AdminPaymentVerificationTabProps) {
+export function AdminPaymentVerificationTab({
+  onRefresh,
+  onNavigateToWhatsApp,
+  activeWhatsAppNumber,
+}: AdminPaymentVerificationTabProps) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -208,6 +214,30 @@ export function AdminPaymentVerificationTab({ onRefresh }: AdminPaymentVerificat
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
+        </div>
+
+        {/* Dynamic WhatsApp Notification Alert Receiver Banner */}
+        <div className="mt-3.5 pt-3 border-t border-amber-800/80 flex flex-wrap items-center justify-between gap-2.5 text-xs">
+          <div className="flex items-center gap-2 text-amber-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <MessageSquare className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>
+              बुकिंग सत्यापन अलर्ट गंतव्य (WhatsApp Alert to):{' '}
+              <strong className="font-mono text-white text-xs sm:text-sm tracking-wide">
+                +91 {(activeWhatsAppNumber || '8142731917').replace(/\D/g, '').slice(-10)}
+              </strong>
+            </span>
+          </div>
+          {onNavigateToWhatsApp && (
+            <button
+              type="button"
+              onClick={onNavigateToWhatsApp}
+              className="px-3 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-[11px] transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+            >
+              <span>📲 नंबर बदलें (Change WhatsApp Number)</span>
+              <span>→</span>
+            </button>
+          )}
         </div>
       </div>
 

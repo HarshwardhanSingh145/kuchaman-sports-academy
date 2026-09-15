@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { notifyOwnerOfPendingVerification } from '@/lib/notifications';
+import { StorageService } from '@/lib/storage';
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,19 +26,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await notifyOwnerOfPendingVerification({
-      id,
-      userName,
-      userPhone,
-      userEmail,
-      amountPaid: Number(amountPaid) || 0,
-      sport: sport || 'cricket',
-      resourceName,
-      date,
-      timeRange: timeRange || '',
-      durationHours,
-      transactionId,
-    });
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    const baseUrl = host ? `${proto}://${host}` : undefined;
+
+    const currentConfig = StorageService.getConfig();
+    const targetOwnerWhatsApp = currentConfig.ownerWhatsAppNumber || currentConfig.phone;
+
+    const result = await notifyOwnerOfPendingVerification(
+      {
+        id,
+        userName,
+        userPhone,
+        userEmail,
+        amountPaid: Number(amountPaid) || 0,
+        sport: sport || 'cricket',
+        resourceName,
+        date,
+        timeRange: timeRange || '',
+        durationHours,
+        transactionId,
+      },
+      baseUrl,
+      targetOwnerWhatsApp
+    );
 
     return NextResponse.json({
       success: true,

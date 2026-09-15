@@ -106,6 +106,8 @@ export async function POST(req: NextRequest) {
       result.booking.paymentStatus === 'PENDING_VERIFICATION'
     ) {
       try {
+        const cfg = StorageService.getConfig();
+        const targetOwnerWhatsApp = cfg.ownerWhatsAppNumber || cfg.phone;
         notificationResult = await notifyOwnerOfPendingVerification({
           id: result.booking.id,
           userName: result.booking.userName,
@@ -118,7 +120,7 @@ export async function POST(req: NextRequest) {
           timeRange: result.booking.timeRange,
           durationHours: result.booking.durationHours,
           transactionId: result.booking.transactionId,
-        });
+        }, undefined, targetOwnerWhatsApp);
       } catch (notifyErr) {
         console.warn('Owner notification notice:', notifyErr);
       }
