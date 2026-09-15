@@ -97,7 +97,7 @@ export function getBookedAndBlockedIntervals(options: {
   // 1. Existing Confirmed Bookings
   bookings.forEach((b) => {
     if (b.date !== date) return;
-    if (b.status === 'CANCELLED') return;
+    if (b.status === 'CANCELLED' || b.status === 'PAYMENT_VERIFICATION_FAILED') return;
 
     // Resource or sport match check
     if (resourceId && b.resourceId && b.resourceId !== resourceId) {

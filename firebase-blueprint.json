@@ -36,7 +36,7 @@
         "playerCount": { "type": "number" },
         "experienceLevel": { "type": "string", "maxLength": 64 },
         "notes": { "type": "string", "maxLength": 500 },
-        "status": { "type": "string", "enum": ["CONFIRMED", "COMPLETED", "CANCELLED"] },
+        "status": { "type": "string", "enum": ["CONFIRMED", "COMPLETED", "CANCELLED", "AWAITING_VERIFICATION", "PAYMENT_VERIFICATION_FAILED"] },
         "createdAt": { "type": "string", "maxLength": 64 },
         "createdBy": { "type": "string", "maxLength": 128 },
         "amountPaid": { "type": "number" },

@@ -33,6 +33,7 @@ import {
   Gift,
   Percent,
   Sparkles,
+  ShieldAlert,
 } from 'lucide-react';
 import { CricketNet, CricketSlot, SwimmingSession, Booking, AcademyConfig } from '@/lib/types';
 import { useFirebase } from '@/lib/FirebaseContext';
@@ -41,6 +42,7 @@ import { AdminDiscountPopupTab } from './AdminDiscountPopupTab';
 import { AdminHourlyRatesTab } from './AdminHourlyRatesTab';
 import { AdminBookingTimingTab } from './AdminBookingTimingTab';
 import { AdminBookingInfoTab } from './AdminBookingInfoTab';
+import { AdminPaymentVerificationTab } from './AdminPaymentVerificationTab';
 import { subscribeToBookings, subscribeToConfig } from '@/lib/firestore-service';
 
 interface AdminModalProps {
@@ -59,7 +61,7 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
 
   // Active Tab for focused Academy Admin controls
   const [activeTab, setActiveTab] = useState<
-    'booking_info' | 'hourly_rates' | 'booking_timing' | 'discount_popup' | 'payment_setup' | 'nets_facilities'
+    'payment_verification' | 'booking_info' | 'hourly_rates' | 'booking_timing' | 'discount_popup' | 'payment_setup' | 'nets_facilities'
   >('booking_info');
   const [cricketSubView, setCricketSubView] = useState<'slots' | 'nets'>('slots');
 
@@ -640,6 +642,31 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
             {/* Nav Tabs & Controls */}
             <div className="px-3 sm:px-6 pt-3 pb-2 bg-[#F5EBE0] border-b border-[#8C5A32]/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
               <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-1 scrollbar-none max-w-full">
+                {/* Tab 0: Payment Verification */}
+                {(() => {
+                  const pendingCount = bookings.filter(
+                    (b) => b.paymentStatus === 'PENDING_VERIFICATION' || b.status === 'AWAITING_VERIFICATION'
+                  ).length;
+                  return (
+                    <button
+                      onClick={() => setActiveTab('payment_verification')}
+                      className={`px-3 sm:px-4 py-2 text-xs font-agbalumo tracking-wide uppercase transition-all cursor-pointer border rounded-xl whitespace-nowrap flex items-center gap-1.5 flex-shrink-0 ${
+                        activeTab === 'payment_verification'
+                          ? 'bg-amber-500 border-amber-600 text-neutral-950 font-black shadow-xs'
+                          : 'bg-white/40 border-transparent text-[#7A5C4A] hover:text-[#2C1A0E] hover:bg-white/80'
+                      }`}
+                    >
+                      <ShieldAlert className={`w-3.5 h-3.5 ${activeTab === 'payment_verification' ? 'text-neutral-950' : 'text-amber-700'}`} />
+                      <span>🛡️ भुगतान सत्यापन (Verification)</span>
+                      {pendingCount > 0 && (
+                        <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white animate-pulse">
+                          {pendingCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })()}
+
                 {/* Tab 1: Booking Information */}
                 <button
                   onClick={() => setActiveTab('booking_info')}
@@ -741,6 +768,13 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
                 <button onClick={() => setActionMessage('')} className="text-[#7A5C4A] hover:text-[#2C1A0E] p-1">
                   &times;
                 </button>
+              </div>
+            )}
+
+            {/* Tab 0: Payment Verification Section */}
+            {activeTab === 'payment_verification' && (
+              <div className="p-3 sm:p-6 overflow-y-auto flex-1">
+                <AdminPaymentVerificationTab onRefresh={loadAdminData} />
               </div>
             )}
 

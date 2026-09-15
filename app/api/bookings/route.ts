@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { StorageService } from '@/lib/storage';
 import { createFirestoreBooking, getFirestoreBookings } from '@/lib/firestore-service';
+import { notifyOwnerOfPendingVerification } from '@/lib/notifications';
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
       paymentScreenshot,
       transactionId,
       paymentMethod,
+      status,
     } = body;
 
     if (!sport || !resourceId || !resourceName || !date || !timeRange || !userName || !userPhone) {
@@ -68,6 +70,9 @@ export async function POST(req: NextRequest) {
     if (notes && typeof notes === 'string' && notes.trim()) {
       bookingInput.notes = notes.trim();
     }
+    if (status && typeof status === 'string') {
+      bookingInput.status = status;
+    }
     if (paymentStatus && typeof paymentStatus === 'string') {
       bookingInput.paymentStatus = paymentStatus;
     }
@@ -94,10 +99,42 @@ export async function POST(req: NextRequest) {
       console.warn('Firestore booking creation notice:', err);
     }
 
+    // If booking is awaiting verification, immediately trigger owner notification
+    let notificationResult = null;
+    if (
+      result.booking.status === 'AWAITING_VERIFICATION' ||
+      result.booking.paymentStatus === 'PENDING_VERIFICATION'
+    ) {
+      try {
+        notificationResult = await notifyOwnerOfPendingVerification({
+          id: result.booking.id,
+          userName: result.booking.userName,
+          userPhone: result.booking.userPhone,
+          userEmail: result.booking.userEmail,
+          amountPaid: result.booking.amountPaid || 0,
+          sport: result.booking.sport,
+          resourceName: result.booking.resourceName,
+          date: result.booking.date,
+          timeRange: result.booking.timeRange,
+          durationHours: result.booking.durationHours,
+          transactionId: result.booking.transactionId,
+        });
+      } catch (notifyErr) {
+        console.warn('Owner notification notice:', notifyErr);
+      }
+    }
+
+    const isPending =
+      result.booking.status === 'AWAITING_VERIFICATION' ||
+      result.booking.paymentStatus === 'PENDING_VERIFICATION';
+
     return NextResponse.json({
       success: true,
-      message: 'Booking confirmed successfully at Kuchaman Sports Academy!',
+      message: isPending
+        ? 'Booking request submitted for verification. Academy is verifying payment.'
+        : 'Booking confirmed successfully at Kuchaman Sports Academy!',
       booking: result.booking,
+      notification: notificationResult,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

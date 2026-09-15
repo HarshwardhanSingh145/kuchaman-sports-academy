@@ -658,12 +658,20 @@ export class StorageService {
       }
     }
 
+    const paymentStatus =
+      bookingData.paymentStatus ||
+      (bookingData.paymentScreenshot || bookingData.transactionId ? 'PENDING_VERIFICATION' : 'APPROVED');
+
+    const initialStatus =
+      (bookingData as any).status ||
+      (paymentStatus === 'PENDING_VERIFICATION' ? 'AWAITING_VERIFICATION' : 'CONFIRMED');
+
     const newBooking: Booking = {
       ...(cleanBookingData as any),
       id: bookingId,
       amountPaid: bookingData.amountPaid ?? 0,
-      status: 'CONFIRMED',
-      paymentStatus: bookingData.paymentStatus || (bookingData.paymentScreenshot || bookingData.transactionId ? 'PENDING_VERIFICATION' : 'APPROVED'),
+      status: initialStatus,
+      paymentStatus: paymentStatus,
       createdAt: new Date().toISOString(),
     };
 
@@ -683,7 +691,7 @@ export class StorageService {
 
   static updateBookingStatus(
     bookingId: string,
-    status: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
+    status: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'AWAITING_VERIFICATION' | 'PAYMENT_VERIFICATION_FAILED'
   ): Booking | null {
     const booking = runtimeData.bookings.find((b) => b.id === bookingId);
     if (!booking) return null;
@@ -698,7 +706,7 @@ export class StorageService {
   static updateBookingPaymentStatus(
     bookingId: string,
     paymentStatus: 'PENDING_VERIFICATION' | 'APPROVED' | 'REJECTED',
-    status?: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED',
+    status?: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'AWAITING_VERIFICATION' | 'PAYMENT_VERIFICATION_FAILED',
     verifiedBy?: string
   ): Booking | null {
     const booking = runtimeData.bookings.find((b) => b.id === bookingId);
@@ -709,7 +717,7 @@ export class StorageService {
     } else if (paymentStatus === 'APPROVED') {
       booking.status = 'CONFIRMED';
     } else if (paymentStatus === 'REJECTED') {
-      booking.status = 'CANCELLED';
+      booking.status = 'PAYMENT_VERIFICATION_FAILED';
     }
     booking.verifiedAt = new Date().toISOString();
     if (verifiedBy) booking.verifiedBy = verifiedBy;

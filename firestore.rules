@@ -59,7 +59,7 @@ service cloud.firestore {
              data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 128 &&
              data.userPhone is string && data.userPhone.size() >= 6 && data.userPhone.size() <= 32 &&
              data.playerCount is number && data.playerCount >= 1 && data.playerCount <= 100 &&
-             (data.status == 'CONFIRMED' || data.status == 'COMPLETED' || data.status == 'CANCELLED' || data.status == 'PENDING') &&
+             (data.status == 'CONFIRMED' || data.status == 'COMPLETED' || data.status == 'CANCELLED' || data.status == 'PENDING' || data.status == 'AWAITING_VERIFICATION' || data.status == 'PAYMENT_VERIFICATION_FAILED') &&
              data.createdAt is string && data.createdAt.size() <= 64;
     }
 

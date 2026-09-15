@@ -175,7 +175,7 @@ export async function createFirestoreBooking(booking: Booking): Promise<Booking>
  */
 export async function updateFirestoreBookingStatus(
   bookingId: string,
-  status: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED',
+  status: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'AWAITING_VERIFICATION' | 'PAYMENT_VERIFICATION_FAILED',
   paymentUpdates?: {
     paymentStatus?: 'PENDING_VERIFICATION' | 'APPROVED' | 'REJECTED';
     verifiedAt?: string;

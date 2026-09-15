@@ -66,7 +66,7 @@ export interface Booking {
   playerCount: number;
   experienceLevel?: string;
   notes?: string;
-  status: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+  status: 'CONFIRMED' | 'COMPLETED' | 'CANCELLED' | 'AWAITING_VERIFICATION' | 'PAYMENT_VERIFICATION_FAILED';
   createdAt: string;
   // Payment Proof & Status Details
   amountPaid?: number;

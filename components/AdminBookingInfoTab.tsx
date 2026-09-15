@@ -64,7 +64,7 @@ export function AdminBookingInfoTab({ onRefresh }: AdminBookingInfoTabProps) {
   const handleUpdatePaymentStatus = async (
     bookingId: string,
     paymentStatus: 'APPROVED' | 'REJECTED',
-    status?: 'CONFIRMED' | 'CANCELLED'
+    status?: 'CONFIRMED' | 'CANCELLED' | 'PAYMENT_VERIFICATION_FAILED' | 'AWAITING_VERIFICATION'
   ) => {
     setUpdatingId(bookingId);
     try {
@@ -323,10 +323,14 @@ export function AdminBookingInfoTab({ onRefresh }: AdminBookingInfoTabProps) {
                           ? 'bg-emerald-100 text-emerald-800'
                           : b.status === 'COMPLETED'
                           ? 'bg-blue-100 text-blue-800'
+                          : b.status === 'AWAITING_VERIFICATION'
+                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                          : b.status === 'PAYMENT_VERIFICATION_FAILED'
+                          ? 'bg-red-100 text-red-900 border border-red-300'
                           : 'bg-rose-100 text-rose-800'
                       }`}
                     >
-                      {b.status}
+                      {b.status === 'AWAITING_VERIFICATION' ? 'Awaiting Verification' : b.status === 'PAYMENT_VERIFICATION_FAILED' ? 'Verification Failed' : b.status}
                     </span>
 
                     <span
@@ -434,7 +438,7 @@ export function AdminBookingInfoTab({ onRefresh }: AdminBookingInfoTabProps) {
                       <button
                         type="button"
                         disabled={updatingId === b.id}
-                        onClick={() => handleUpdatePaymentStatus(b.id, 'REJECTED', 'CANCELLED')}
+                        onClick={() => handleUpdatePaymentStatus(b.id, 'REJECTED', 'PAYMENT_VERIFICATION_FAILED')}
                         className="px-3 py-1.5 rounded-xl bg-rose-100 hover:bg-rose-200 text-rose-800 text-xs font-bold inline-flex items-center gap-1 cursor-pointer transition-all disabled:opacity-50"
                       >
                         <XCircle className="w-3.5 h-3.5" />
