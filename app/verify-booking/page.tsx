@@ -199,6 +199,37 @@ function VerifyBookingContent() {
         {/* Booking Details Card */}
         {booking && (
           <div className="p-6 space-y-4">
+            {/* Client WhatsApp Notification Status Banner */}
+            {(isConfirmed || isRejected) && (
+              <div
+                className={`p-3.5 rounded-2xl border flex items-start gap-3 text-xs leading-relaxed ${
+                  isConfirmed
+                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                    : 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                }`}
+              >
+                <MessageCircle className="w-5 h-5 shrink-0 mt-0.5 text-emerald-400" />
+                <div className="space-y-1">
+                  <p className="font-bold">
+                    {isConfirmed
+                      ? '✅ ग्राहक के व्हाट्सएप पर कन्फर्मेशन मैसेज भेजा गया:'
+                      : '⚠️ ग्राहक के व्हाट्सएप पर कैंसलेशन मैसेज भेजा गया:'}
+                  </p>
+                  <p className="text-white/80">
+                    मोबाइल नंबर <span className="font-mono font-bold text-white">{booking.userPhone}</span> ({booking.userName})
+                  </p>
+                  <a
+                    href={`https://wa.me/91${booking.userPhone.replace(/\D/g, '').slice(-10)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 font-bold text-white underline underline-offset-2 mt-1 hover:text-emerald-300"
+                  >
+                    व्हाट्सएप पर ग्राहक से चैट खोलें →
+                  </a>
+                </div>
+              </div>
+            )}
+
             <div className="bg-neutral-800/80 border border-neutral-700/80 rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between border-b border-neutral-700/60 pb-2">
                 <span className="text-xs text-neutral-400 font-medium">बुकिंग ID:</span>

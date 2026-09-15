@@ -106,6 +106,10 @@ export async function POST(req: NextRequest) {
       result.booking.paymentStatus === 'PENDING_VERIFICATION'
     ) {
       try {
+        const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+        const proto = req.headers.get('x-forwarded-proto') || 'https';
+        const baseUrl = host ? `${proto}://${host}` : undefined;
+
         const cfg = StorageService.getConfig();
         const targetOwnerWhatsApp = cfg.ownerWhatsAppNumber || cfg.phone;
         notificationResult = await notifyOwnerOfPendingVerification({
@@ -120,7 +124,7 @@ export async function POST(req: NextRequest) {
           timeRange: result.booking.timeRange,
           durationHours: result.booking.durationHours,
           transactionId: result.booking.transactionId,
-        }, undefined, targetOwnerWhatsApp);
+        }, baseUrl, targetOwnerWhatsApp);
       } catch (notifyErr) {
         console.warn('Owner notification notice:', notifyErr);
       }

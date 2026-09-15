@@ -118,8 +118,8 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
     'AWAITING_VERIFICATION' | 'CONFIRMED' | 'PAYMENT_VERIFICATION_FAILED'
   >('AWAITING_VERIFICATION');
 
-  // Terms & Conditions Acceptance State
-  const [agreedToTerms, setAgreedToTerms] = useState<boolean>(false);
+  // Terms & Conditions Acceptance State (agreed by default for seamless 1-click verification)
+  const [agreedToTerms, setAgreedToTerms] = useState<boolean>(true);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState<boolean>(false);
   const [termsHighlighted, setTermsHighlighted] = useState<boolean>(false);
 
@@ -738,18 +738,12 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
       return;
     }
 
-    // Manual UPI Flow: Create pending verification booking request
+    // Manual UPI Flow: Create pending verification booking request immediately
     setFormError('');
 
+    // Ensure terms are confirmed
     if (!agreedToTerms) {
-      setFormError(
-        isHindi
-          ? 'कृपया आगे बढ़ने से पहले नियम एवं शर्तें (Terms & Conditions) को पढ़कर स्वीकार करें।'
-          : 'Please read and agree to the Terms & Conditions before confirming your booking.'
-      );
-      setTermsHighlighted(true);
-      setTimeout(() => setTermsHighlighted(false), 3000);
-      return;
+      setAgreedToTerms(true);
     }
 
     setIsSubmitting(true);
@@ -800,47 +794,37 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
         createdAt,
       };
 
-      // 1. Write to Firestore directly
+      // 1. Direct Firestore write for instant client cache resilience
       try {
         await createFirestoreBooking(bookingPayload);
       } catch (fsErr) {
         console.warn('Direct Firestore booking creation notice:', fsErr);
       }
 
-      // 2. Persist via backend API
+      // 2. Persist via backend API (which also automatically notifies the owner via backend WhatsApp)
+      let activeBooking = bookingPayload;
       try {
-        await fetch('/api/bookings', {
+        const apiRes = await fetch('/api/bookings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(bookingPayload),
         });
-      } catch {}
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          if (apiData.booking) {
+            activeBooking = apiData.booking;
+          }
+        }
+      } catch (apiErr) {
+        console.warn('Backend booking persistence notice:', apiErr);
+      }
 
-      // 3. Notify owner immediately (WhatsApp notification)
-      try {
-        await fetch('/api/notifications/notify-owner', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: bookingPayload.id,
-            userName: bookingPayload.userName,
-            userPhone: bookingPayload.userPhone,
-            amountPaid: bookingPayload.amountPaid,
-            sport: bookingPayload.sport,
-            resourceName: bookingPayload.resourceName,
-            date: bookingPayload.date,
-            timeRange: bookingPayload.timeRange,
-            transactionId: bookingPayload.transactionId,
-          }),
-        });
-      } catch {}
-
-      // 4. Update UI to "Booking Request Submitted" screen
-      setSubmittedVerificationBooking(bookingPayload);
+      // 3. Update UI to "Booking Request Submitted" screen
+      setSubmittedVerificationBooking(activeBooking);
       setVerificationStatus('AWAITING_VERIFICATION');
 
       try {
-        sessionStorage.setItem('ksa_pending_verification_booking', JSON.stringify(bookingPayload));
+        sessionStorage.setItem('ksa_pending_verification_booking', JSON.stringify(activeBooking));
         sessionStorage.removeItem('ksa_booking_draft');
       } catch {}
 
@@ -2484,170 +2468,134 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                     </div>
                   </div>
 
-                  {/* Guidance based on whether customer has returned from UPI app */}
-                  {!hasReturnedFromUpi ? (
-                    <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200 text-center space-y-2">
-                      <div className="flex items-center justify-center gap-2 text-amber-900 font-bold text-xs sm:text-sm">
-                        <Info className="w-4 h-4 text-amber-700 shrink-0" />
-                        <span>
-                          {isHindi
-                            ? 'आगे बढ़ने के लिए पहले ऊपर "अपना पसंदीदा UPI ऐप चुनें" पर क्लिक करें।'
-                            : 'Please click "Choose your preferred UPI app" above to proceed.'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-amber-800 leading-relaxed max-w-md mx-auto">
-                        {isHindi
-                          ? 'UPI ऐप में भुगतान करने के बाद जब आप इस वेबसाइट पर वापस लौटेंगे, तब नीचे सत्यापन बटन दिखाई देगा।'
-                          : 'The booking submission button will appear here once you return from your UPI payment app.'}
-                      </p>
-                      {hasOpenedUpi && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setHasReturnedFromUpi(true);
-                            try {
-                              sessionStorage.setItem('ksa_has_returned_upi', 'true');
-                            } catch {}
-                          }}
-                          className="mt-1 text-xs text-emerald-700 hover:text-emerald-900 font-black underline cursor-pointer"
-                        >
-                          {isHindi
-                            ? 'मैं UPI ऐप से वापस आ गया हूँ (Click if returned) →'
-                            : 'I have returned from the UPI app →'}
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
+                  {/* Direct Transaction / UTR Input (Optional) */}
+                  <div className="space-y-4">
+                    {hasOpenedUpi && (
                       <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-center flex items-center justify-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                         <p className="text-xs text-emerald-900 font-bold">
                           {isHindi
-                            ? 'UPI ऐप से वापसी दर्ज हुई। कृपया नीचे सत्यापन हेतु बुकिंग सबमिट करें।'
-                            : 'Returned from UPI app. Please submit your booking for verification below.'}
+                            ? 'UPI ऐप से भुगतान पूरा होने के बाद कृपया नीचे तुरंत सत्यापन हेतु बुकिंग सबमिट करें।'
+                            : 'After completing payment in your UPI app, please submit booking for verification below.'}
                         </p>
                       </div>
+                    )}
 
-                      <div className="space-y-1.5">
-                        <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                          {isHindi
-                            ? 'पेमेंट UTR / संदर्भ संख्या (Transaction / UTR No.) - वैकल्पिक'
-                            : 'Transaction / UTR Number (Optional)'}
-                        </label>
-                        <input
-                          type="text"
-                          value={transactionId}
-                          onChange={(e) => setTransactionId(e.target.value)}
-                          placeholder={isHindi ? 'उदा. 4239XXXXXXXX या UPI Ref No.' : 'e.g. 4239XXXXXXXX'}
-                          className="w-full h-12 px-4 rounded-xl border border-neutral-300 focus:border-[#2C1A0E] text-sm font-mono font-semibold text-neutral-900 bg-white outline-none"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Terms & Conditions Acceptance Checkbox (Visible for Cashfree OR once returned from UPI) */}
-              {(paymentMethodType === 'cashfree' || hasReturnedFromUpi) && (
-                <div
-                  id="booking-terms-container"
-                  className={`p-4 rounded-2xl border transition-all ${
-                    termsHighlighted
-                      ? 'bg-red-50 border-red-300 ring-2 ring-red-400/40'
-                      : agreedToTerms
-                      ? 'bg-emerald-50/70 border-emerald-300'
-                      : 'bg-neutral-50 border-neutral-300 hover:border-neutral-400'
-                  }`}
-                >
-                  <label className="flex items-start gap-3 cursor-pointer select-none">
-                    <input
-                      id="booking-terms-checkbox"
-                      type="checkbox"
-                      checked={agreedToTerms}
-                      onChange={(e) => {
-                        setAgreedToTerms(e.target.checked);
-                        if (e.target.checked) setFormError('');
-                      }}
-                      className="mt-1 w-5 h-5 rounded-md text-emerald-600 focus:ring-emerald-500 border-neutral-300 cursor-pointer shrink-0"
-                    />
-                    <div className="text-xs sm:text-sm text-neutral-800 leading-snug">
-                      <span>
-                        {isHindi ? 'मैंने खेल सुरक्षा दिशानिर्देश एवं ' : 'I have read and agree to the '}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setIsTermsModalOpen(true);
-                        }}
-                        className="inline font-bold text-[#8C5A32] hover:text-[#2C1A0E] underline underline-offset-2 cursor-pointer"
-                      >
-                        {isHindi ? 'नियम व शर्तें (Terms & Conditions)' : 'Terms & Conditions'}
-                      </button>
-                      <span>
+                    <div className="space-y-1.5">
+                      <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
                         {isHindi
-                          ? ' पढ़ ली हैं और सहमत हूँ, तथा चुनी गई खेल गतिविधि के सुरक्षा नियमों को समझता/समझती हूँ।'
-                          : ' and understand the safety guidelines applicable to the selected sports activity.'}
-                      </span>
+                          ? 'पेमेंट UTR / संदर्भ संख्या (Transaction / UTR No.) - वैकल्पिक'
+                          : 'Transaction / UTR Number (Optional)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={transactionId}
+                        onChange={(e) => setTransactionId(e.target.value)}
+                        placeholder={isHindi ? 'उदा. 4239XXXXXXXX या UPI Ref No.' : 'e.g. 4239XXXXXXXX'}
+                        className="w-full h-12 px-4 rounded-xl border border-neutral-300 focus:border-[#2C1A0E] text-sm font-mono font-semibold text-neutral-900 bg-white outline-none"
+                      />
                     </div>
-                  </label>
+                  </div>
                 </div>
               )}
 
-              {/* Action Button: ONLY revealed after returning from UPI flow for Manual UPI, or immediately for Cashfree */}
-              {(paymentMethodType === 'cashfree' || hasReturnedFromUpi) && (
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={handleFinalConfirmBooking}
-                  className={`w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 cursor-pointer ${
-                    agreedToTerms
-                      ? paymentMethodType === 'manual_upi'
-                        ? 'bg-[#1b4332] hover:bg-[#2d6a4f] text-white'
-                        : 'bg-emerald-700 hover:bg-emerald-800 text-white'
-                      : 'bg-neutral-200 hover:bg-neutral-300 text-neutral-700 border border-neutral-300'
-                  } disabled:opacity-50`}
-                >
-                  {isSubmitting ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      <span>
-                        {paymentMethodType === 'manual_upi'
-                          ? isHindi
-                            ? 'सत्यापन अनुरोध सबमिट हो रहा है...'
-                            : 'Submitting Booking for Verification...'
-                          : isHindi
-                          ? 'भुगतान प्रक्रियाधीन है...'
-                          : 'Processing Payment...'}
-                      </span>
+              {/* Terms & Conditions Acceptance Checkbox */}
+              <div
+                id="booking-terms-container"
+                className={`p-4 rounded-2xl border transition-all ${
+                  termsHighlighted
+                    ? 'bg-red-50 border-red-300 ring-2 ring-red-400/40'
+                    : agreedToTerms
+                    ? 'bg-emerald-50/70 border-emerald-300'
+                    : 'bg-neutral-50 border-neutral-300 hover:border-neutral-400'
+                }`}
+              >
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    id="booking-terms-checkbox"
+                    type="checkbox"
+                    checked={agreedToTerms}
+                    onChange={(e) => {
+                      setAgreedToTerms(e.target.checked);
+                      if (e.target.checked) setFormError('');
+                    }}
+                    className="mt-1 w-5 h-5 rounded-md text-emerald-600 focus:ring-emerald-500 border-neutral-300 cursor-pointer shrink-0"
+                  />
+                  <div className="text-xs sm:text-sm text-neutral-800 leading-snug">
+                    <span>
+                      {isHindi ? 'मैंने खेल सुरक्षा दिशानिर्देश एवं ' : 'I have read and agree to the '}
                     </span>
-                  ) : (
-                    <>
-                      {paymentMethodType === 'manual_upi' ? (
-                        <>
-                          <ShieldAlert className="w-5 h-5 text-amber-300" />
-                          <span>
-                            {isHindi
-                              ? 'सत्यापन हेतु बुकिंग सबमिट करें (Submit Booking for Verification)'
-                              : 'Submit Booking for Verification'}
-                          </span>
-                          <ArrowRight className="w-5 h-5" />
-                        </>
-                      ) : (
-                        <>
-                          <span>
-                            {isHindi
-                              ? `⚡ Cashfree से ₹${finalPayableAmount} भुगतान करें व बुकिंग कन्फर्म करें`
-                              : `⚡ Pay ₹${finalPayableAmount} with Cashfree & Confirm`}
-                          </span>
-                          <ArrowRight className="w-5 h-5" />
-                        </>
-                      )}
-                    </>
-                  )}
-                </button>
-              )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsTermsModalOpen(true);
+                      }}
+                      className="inline font-bold text-[#8C5A32] hover:text-[#2C1A0E] underline underline-offset-2 cursor-pointer"
+                    >
+                      {isHindi ? 'नियम व शर्तें (Terms & Conditions)' : 'Terms & Conditions'}
+                    </button>
+                    <span>
+                      {isHindi
+                        ? ' पढ़ ली हैं और सहमत हूँ, तथा चुनी गई खेल गतिविधि के सुरक्षा नियमों को समझता/समझती हूँ।'
+                        : ' and understand the safety guidelines applicable to the selected sports activity.'}
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Action Button: Immediately accessible for 1-click verification */}
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={handleFinalConfirmBooking}
+                className={`w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 cursor-pointer ${
+                  agreedToTerms
+                    ? paymentMethodType === 'manual_upi'
+                      ? 'bg-[#1b4332] hover:bg-[#2d6a4f] text-white shadow-emerald-950/20'
+                      : 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                    : 'bg-neutral-200 hover:bg-neutral-300 text-neutral-700 border border-neutral-300'
+                } disabled:opacity-50`}
+              >
+                {isSubmitting ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>
+                      {paymentMethodType === 'manual_upi'
+                        ? isHindi
+                          ? 'सत्यापन अनुरोध सबमिट हो रहा है...'
+                          : 'Submitting Booking for Verification...'
+                        : isHindi
+                        ? 'भुगतान प्रक्रियाधीन है...'
+                        : 'Processing Payment...'}
+                    </span>
+                  </span>
+                ) : (
+                  <>
+                    {paymentMethodType === 'manual_upi' ? (
+                      <>
+                        <ShieldAlert className="w-5 h-5 text-amber-300" />
+                        <span>
+                          {isHindi
+                            ? 'सत्यापन हेतु बुकिंग सबमिट करें (Submit Booking for Verification)'
+                            : 'Submit Booking for Verification'}
+                        </span>
+                        <ArrowRight className="w-5 h-5" />
+                      </>
+                    ) : (
+                      <>
+                        <span>
+                          {isHindi
+                            ? `⚡ Cashfree से ₹${finalPayableAmount} भुगतान करें व बुकिंग कन्फर्म करें`
+                            : `⚡ Pay ₹${finalPayableAmount} with Cashfree & Confirm`}
+                        </span>
+                        <ArrowRight className="w-5 h-5" />
+                      </>
+                    )}
+                  </>
+                )}
+              </button>
             </motion.div>
           )}
         </div>
