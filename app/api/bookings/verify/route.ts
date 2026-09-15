@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'गलत या अनुपलब्ध एडमिन पासवर्ड! कृपया सही पासवर्ड (KSA2026) दर्ज करें।',
+          error: 'गलत या अनुपलब्ध एडमिन पासवर्ड! कृपया सही पासवर्ड दर्ज करें।',
           code: 'INVALID_PASSWORD',
         },
         { status: 401 }

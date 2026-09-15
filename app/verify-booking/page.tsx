@@ -99,7 +99,7 @@ function VerifyBookingContent() {
     if (!id || !token) return;
 
     if (!password.trim()) {
-      setPasswordError('कृपया सत्यापन के लिए एडमिन पासवर्ड (KSA2026) दर्ज करें');
+      setPasswordError('कृपया सत्यापन के लिए एडमिन पासवर्ड दर्ज करें');
       return;
     }
 
@@ -117,7 +117,7 @@ function VerifyBookingContent() {
       const data = await res.json();
       if (!res.ok || !data.success) {
         if (data.code === 'INVALID_PASSWORD' || res.status === 401) {
-          setPasswordError(data.error || 'गलत पासवर्ड! कृपया सही एडमिन पासवर्ड (KSA2026) दर्ज करें।');
+          setPasswordError(data.error || 'गलत पासवर्ड! कृपया सही एडमिन पासवर्ड दर्ज करें।');
         } else {
           setError(data.error || 'अद्यतन विफल रहा');
         }
@@ -331,9 +331,9 @@ function VerifyBookingContent() {
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-bold text-amber-400 flex items-center gap-1.5">
                     <Lock className="w-3.5 h-3.5" />
-                    ओनर / एडमिन पासवर्ड (Admin Password Required)
+                    ओनर / एडमिन पासवर्ड सत्यापन (Admin Verification)
                   </span>
-                  <span className="text-[11px] text-neutral-400 font-mono">डिफ़ॉल्ट: KSA2026</span>
+                  <span className="text-[11px] text-neutral-400">सुरक्षित पहुंच</span>
                 </div>
 
                 <div className="relative">
@@ -344,8 +344,8 @@ function VerifyBookingContent() {
                       setPassword(e.target.value);
                       if (passwordError) setPasswordError(null);
                     }}
-                    placeholder="एडमिन पासवर्ड दर्ज करें (KSA2026)"
-                    className="w-full h-11 px-3.5 pr-10 rounded-xl bg-neutral-900 border border-neutral-700 focus:border-amber-400 text-white font-mono text-sm outline-none transition"
+                    placeholder="ओनर / एडमिन पासवर्ड दर्ज करें..."
+                    className="w-full h-11 px-3.5 pr-10 rounded-xl bg-neutral-900 border border-neutral-700 focus:border-amber-400 text-white font-mono text-sm outline-none transition placeholder:text-neutral-500"
                   />
                   <button
                     type="button"
