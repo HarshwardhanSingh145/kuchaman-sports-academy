@@ -132,7 +132,7 @@ service cloud.firestore {
     match /bookings/{bookingId} {
       allow read: if true;
       allow create: if isValidId(bookingId) && isValidBooking(incoming());
-      allow update: if isValidId(bookingId) && isValidBooking(incoming());
+      allow update: if isValidId(bookingId);
       allow delete: if isValidId(bookingId);
     }
 

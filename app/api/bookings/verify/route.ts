@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { StorageService } from '@/lib/storage';
 import { isValidVerificationToken, notifyClientOfBookingDecision } from '@/lib/notifications';
-import { updateFirestoreBookingStatus, getFirestoreBookings } from '@/lib/firestore-service';
+import {
+  updateFirestoreBookingStatus,
+  createFirestoreBooking,
+  getFirestoreBookings,
+} from '@/lib/firestore-service';
 
 export async function GET(req: NextRequest) {
   try {
@@ -69,6 +73,9 @@ export async function GET(req: NextRequest) {
       );
 
       if (updatedBooking) {
+        await createFirestoreBooking(updatedBooking).catch((e) =>
+          console.warn('[Firestore] Verify sync createFirestoreBooking notice:', e)
+        );
         await updateFirestoreBookingStatus(booking.id, 'CONFIRMED', {
           paymentStatus: 'APPROVED',
           verifiedBy: 'WhatsApp 1-Click Owner (8142731917)',
@@ -114,6 +121,9 @@ export async function GET(req: NextRequest) {
       );
 
       if (updatedBooking) {
+        await createFirestoreBooking(updatedBooking).catch((e) =>
+          console.warn('[Firestore] Verify sync createFirestoreBooking notice:', e)
+        );
         await updateFirestoreBookingStatus(booking.id, 'PAYMENT_VERIFICATION_FAILED', {
           paymentStatus: 'REJECTED',
           verifiedBy: 'WhatsApp 1-Click Owner (8142731917)',
@@ -213,6 +223,9 @@ export async function POST(req: NextRequest) {
       );
 
       if (updatedBooking) {
+        await createFirestoreBooking(updatedBooking).catch((e) =>
+          console.warn('[Firestore] Verify sync createFirestoreBooking notice:', e)
+        );
         await updateFirestoreBookingStatus(id, 'CONFIRMED', {
           paymentStatus: 'APPROVED',
           verifiedBy: 'WhatsApp 1-Click Owner (8142731917)',
@@ -257,6 +270,9 @@ export async function POST(req: NextRequest) {
       );
 
       if (updatedBooking) {
+        await createFirestoreBooking(updatedBooking).catch((e) =>
+          console.warn('[Firestore] Verify sync createFirestoreBooking notice:', e)
+        );
         await updateFirestoreBookingStatus(id, 'PAYMENT_VERIFICATION_FAILED', {
           paymentStatus: 'REJECTED',
           verifiedBy: 'WhatsApp 1-Click Owner (8142731917)',

@@ -26,12 +26,14 @@ import { subscribeToBookings } from '@/lib/firestore-service';
 interface AdminPaymentVerificationTabProps {
   onRefresh?: () => void;
   onNavigateToWhatsApp?: () => void;
+  onNavigateToBookings?: () => void;
   activeWhatsAppNumber?: string;
 }
 
 export function AdminPaymentVerificationTab({
   onRefresh,
   onNavigateToWhatsApp,
+  onNavigateToBookings,
   activeWhatsAppNumber,
 }: AdminPaymentVerificationTabProps) {
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -41,11 +43,23 @@ export function AdminPaymentVerificationTab({
   const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [selectedScreenshot, setSelectedScreenshot] = useState<string | null>(null);
 
+  const mergeIntoBookings = (incoming: Booking[]) => {
+    if (!Array.isArray(incoming)) return;
+    setBookings((prev) => {
+      const map = new Map<string, Booking>();
+      prev.forEach((b) => map.set(b.id, b));
+      incoming.forEach((b) => map.set(b.id, { ...(map.get(b.id) || {}), ...b }));
+      return Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    });
+  };
+
   useEffect(() => {
     fetchBookings();
     const unsubscribe = subscribeToBookings((liveBookings) => {
       if (Array.isArray(liveBookings)) {
-        setBookings(liveBookings);
+        mergeIntoBookings(liveBookings);
         setLoading(false);
       }
     });
@@ -57,10 +71,10 @@ export function AdminPaymentVerificationTab({
   const fetchBookings = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/bookings');
+      const res = await fetch('/api/admin/bookings');
       const data = await res.json();
       if (data.success && Array.isArray(data.bookings)) {
-        setBookings(data.bookings);
+        mergeIntoBookings(data.bookings);
       }
     } catch (err) {
       console.error('Error loading bookings for verification:', err);
@@ -289,16 +303,29 @@ export function AdminPaymentVerificationTab({
           <p className="text-xs text-neutral-500 font-bold">Loading pending payment verification requests...</p>
         </div>
       ) : pendingBookings.length === 0 ? (
-        <div className="p-12 text-center bg-white rounded-2xl border border-neutral-200 space-y-3">
+        <div className="p-8 sm:p-12 text-center bg-white rounded-2xl border border-neutral-200 space-y-4">
           <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600">
             <CheckCircle2 className="w-6 h-6" />
           </div>
           <div>
-            <h4 className="text-sm font-black text-neutral-900">No Pending Verification Requests</h4>
-            <p className="text-xs text-neutral-500 mt-0.5 max-w-sm mx-auto">
-              All incoming UPI payments have been verified or no customer has submitted an unverified request.
+            <h4 className="text-sm font-black text-neutral-900">कोई लंबित भुगतान सत्यापन नहीं (No Pending Verification Requests)</h4>
+            <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
+              सभी आने वाले भुगतानों का सत्यापन हो चुका है। आपके द्वारा सत्यापित की गई बुकिंग्स &apos;बुकिंग व ग्राहक जानकारी&apos; टैब में सुरक्षित हैं।
             </p>
           </div>
+
+          {onNavigateToBookings && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onNavigateToBookings}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#2C1A0E] hover:bg-[#432818] text-white font-bold text-xs transition-all shadow-sm cursor-pointer active:scale-95"
+              >
+                <span>📋 सभी सत्यापित व कन्फर्म बुकिंग्स देखें (View All Bookings)</span>
+                <span>→</span>
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

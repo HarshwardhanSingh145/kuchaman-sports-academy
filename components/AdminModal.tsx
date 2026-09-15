@@ -842,6 +842,7 @@ export function AdminModal({ isOpen, onClose, onDataChanged }: AdminModalProps) 
                 <AdminPaymentVerificationTab
                   onRefresh={loadAdminData}
                   onNavigateToWhatsApp={() => setActiveTab('whatsapp_settings')}
+                  onNavigateToBookings={() => setActiveTab('booking_info')}
                   activeWhatsAppNumber={ownerWhatsAppNumber}
                 />
               </div>

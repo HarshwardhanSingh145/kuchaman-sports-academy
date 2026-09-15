@@ -95,8 +95,8 @@ export async function POST(req: NextRequest) {
     // Persist to Firestore
     try {
       await createFirestoreBooking(result.booking);
-    } catch (err) {
-      console.warn('Firestore booking creation notice:', err);
+    } catch (err: any) {
+      console.error('Firestore booking creation error in POST /api/bookings:', err);
     }
 
     // If booking is awaiting verification, immediately trigger owner notification
@@ -159,10 +159,14 @@ export async function GET(req: NextRequest) {
         phone: phone || undefined,
       });
       if (Array.isArray(firestoreBookings)) {
-        if (!phone && !id) {
-          StorageService.setBookings(firestoreBookings);
-        } else if (firestoreBookings.length > 0) {
-          StorageService.mergeBookings(firestoreBookings);
+        StorageService.mergeBookings(firestoreBookings);
+        // Ensure local bookings are also saved to Firestore
+        const localList = StorageService.getBookings();
+        const fsIds = new Set(firestoreBookings.map((b) => b.id));
+        for (const b of localList) {
+          if (!fsIds.has(b.id)) {
+            createFirestoreBooking(b).catch(() => {});
+          }
         }
       }
     } catch (fsErr) {

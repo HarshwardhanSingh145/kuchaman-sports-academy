@@ -35,11 +35,23 @@ export function AdminBookingInfoTab({ onRefresh }: AdminBookingInfoTabProps) {
   const [selectedScreenshot, setSelectedScreenshot] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  const mergeIntoBookings = (incoming: Booking[]) => {
+    if (!Array.isArray(incoming)) return;
+    setBookings((prev) => {
+      const map = new Map<string, Booking>();
+      prev.forEach((b) => map.set(b.id, b));
+      incoming.forEach((b) => map.set(b.id, { ...(map.get(b.id) || {}), ...b }));
+      return Array.from(map.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    });
+  };
+
   useEffect(() => {
     fetchBookings();
     const unsubscribe = subscribeToBookings((liveBookings) => {
       if (Array.isArray(liveBookings)) {
-        setBookings(liveBookings);
+        mergeIntoBookings(liveBookings);
         setLoading(false);
       }
     });
@@ -50,11 +62,11 @@ export function AdminBookingInfoTab({ onRefresh }: AdminBookingInfoTabProps) {
 
   const fetchBookings = () => {
     setLoading(true);
-    fetch('/api/bookings')
+    fetch('/api/admin/bookings')
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.bookings)) {
-          setBookings(data.bookings);
+          mergeIntoBookings(data.bookings);
         }
       })
       .catch((err) => console.error('Error loading bookings:', err))
@@ -177,13 +189,16 @@ export function AdminBookingInfoTab({ onRefresh }: AdminBookingInfoTabProps) {
   };
 
   const filteredBookings = bookings.filter((b) => {
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
       !q ||
       b.id?.toLowerCase().includes(q) ||
       b.userName?.toLowerCase().includes(q) ||
       b.userPhone?.toLowerCase().includes(q) ||
-      b.resourceName?.toLowerCase().includes(q);
+      b.resourceName?.toLowerCase().includes(q) ||
+      b.transactionId?.toLowerCase().includes(q) ||
+      b.date?.toLowerCase().includes(q) ||
+      b.timeRange?.toLowerCase().includes(q);
 
     const matchesSport =
       filterSport === 'all' ||

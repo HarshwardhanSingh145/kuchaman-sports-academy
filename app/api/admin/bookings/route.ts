@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { StorageService } from '@/lib/storage';
 import {
   updateFirestoreBookingStatus,
+  createFirestoreBooking,
   getFirestoreBookings,
   deleteFirestoreBooking,
 } from '@/lib/firestore-service';
@@ -16,10 +17,14 @@ export async function GET(req: NextRequest) {
     try {
       const firestoreBookings = await getFirestoreBookings({ sport, date });
       if (Array.isArray(firestoreBookings)) {
-        if (!sport && !date && !status) {
-          StorageService.setBookings(firestoreBookings);
-        } else if (firestoreBookings.length > 0) {
-          StorageService.mergeBookings(firestoreBookings);
+        StorageService.mergeBookings(firestoreBookings);
+        // Ensure all local bookings are also in Firestore
+        const localList = StorageService.getBookings();
+        const fsIds = new Set(firestoreBookings.map((b) => b.id));
+        for (const b of localList) {
+          if (!fsIds.has(b.id)) {
+            createFirestoreBooking(b).catch(() => {});
+          }
         }
       }
     } catch (fsErr) {
@@ -62,6 +67,7 @@ export async function POST(req: NextRequest) {
     if (updated.verifiedBy) paymentUpdates.verifiedBy = updated.verifiedBy;
 
     try {
+      await createFirestoreBooking(updated).catch(() => {});
       await updateFirestoreBookingStatus(bookingId, updated.status, paymentUpdates);
     } catch (err) {
       console.warn('Firestore booking status update sync error:', err);
