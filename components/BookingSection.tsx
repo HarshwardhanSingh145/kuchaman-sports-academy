@@ -24,12 +24,8 @@ import {
   GraduationCap,
   Layers,
   Info,
-  CreditCard,
-  Wallet,
-  Building2,
   AlertTriangle,
   Loader2,
-  Zap,
   Smartphone,
   AlertCircle,
   XCircle,
@@ -101,9 +97,6 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
 
   // Step 3 / Payment & Verification State
   const [ownerConfig, setOwnerConfig] = useState<Partial<AcademyConfig>>(DEFAULT_CONFIG);
-  const [paymentMethodType, setPaymentMethodType] = useState<'cashfree' | 'manual_upi'>('manual_upi');
-  const [cashfreeConfigStatus, setCashfreeConfigStatus] = useState<{ configured: boolean; env: string } | null>(null);
-  const [cashfreeNotice, setCashfreeNotice] = useState<{ show: boolean; orderId: string; amount: number } | null>(null);
   const [transactionId, setTransactionId] = useState<string>('');
   const [paymentScreenshot, setPaymentScreenshot] = useState<string>('');
   const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
@@ -190,16 +183,6 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
       .then((data) => {
         if (data && data.success && data.config) {
           setOwnerConfig(data.config);
-        }
-      })
-      .catch(() => {});
-
-    // Check Cashfree Payment Gateway status
-    fetch('/api/payments/cashfree/status')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && data.success) {
-          setCashfreeConfigStatus({ configured: data.configured, env: data.env });
         }
       })
       .catch(() => {});
@@ -536,214 +519,28 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
     scrollToTopSmoothly();
   };
 
-  // ---------------------------------------------------------------------------
-  // 6. Cashfree Payment Execution & Verification
-  // ---------------------------------------------------------------------------
-  const executeVerification = async (orderId: string, isSimulated = false) => {
-    setIsSubmitting(true);
+  // Submit Booking & Confirmation (Direct UPI QR Verification)
+  const handleFinalConfirmBooking = async () => {
+    // Direct UPI Flow: Directly call backend API (/api/bookings) with zero popups or permission delays
     setFormError('');
 
-    try {
-      const resourceName =
-        category === 'cricket'
-          ? selectedNetType === 'bigbox'
-            ? 'Big Box Cricket Turf (160x70 ft)'
-            : 'Cricket Practice Net'
-          : 'Semi-Olympic Swimming Pool';
+    // Ensure terms are confirmed automatically without any blocking dialog or warning
+    setAgreedToTerms(true);
 
-      const bookingPayload =
-        category === 'admission'
-          ? {
-              category: 'admission',
-              mentorName: mentorName.trim(),
-              admissionContact: admissionContact.trim(),
-              studentCount: Number(studentCount) || 1,
-              finalPayableAmount,
-              amountPaid: finalPayableAmount,
-            }
-          : {
-              sport: category,
-              category: category === 'cricket' && selectedNetType === 'bigbox' ? 'cricket_bigbox' : category,
-              resourceId: category === 'cricket' ? selectedNetId : 'swimming-pool',
-              resourceName,
-              date: selectedDate,
-              timeRange: selectedSlotTime,
-              startTime: selectedStartTime,
-              endTime: selectedEndTime,
-              durationHours,
-              hourlyRate: slotHourlyRate,
-              originalAmount: originalPrice,
-              discountAmount,
-              userName: customerName.trim(),
-              userPhone: customerPhone.trim(),
-              playerCount: Number(playerCount) || 1,
-              amountPaid: finalPayableAmount,
-            };
+    const userName = (category === 'admission' ? mentorName : customerName).trim();
+    const userPhone = (category === 'admission' ? admissionContact : customerPhone).trim();
 
-      const res = await fetch('/api/payments/cashfree/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId,
-          bookingPayload,
-          category,
-          isSimulated,
-        }),
-      });
-
-      const verifyData = await res.json();
-
-      // STRICT VALIDATION: ONLY confirm if payment is verified as PAID!
-      if (verifyData.success && verifyData.isPaid) {
-        // Confetti explosion for celebration
-        try {
-          confetti({
-            particleCount: 80,
-            spread: 70,
-            origin: { y: 0.6 },
-          });
-        } catch {}
-
-        if (category === 'admission') {
-          setConfirmedBooking({
-            id: orderId,
-            category: 'admission',
-            title: isHindi ? 'एकैडमी एडमिशन (Admission)' : 'Academy Admission',
-            details: `${isHindi ? 'मेंटर' : 'Mentor'}: ${mentorName} • ${studentCount} ${isHindi ? 'छात्र' : 'Students'}`,
-            dateTime: new Date().toLocaleDateString(isHindi ? 'hi-IN' : 'en-US', {
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            }),
-            personName: mentorName,
-            contactNumber: admissionContact,
-            count: studentCount,
-            originalPrice,
-            discountAmount,
-            finalPaid: finalPayableAmount,
-            transactionId: verifyData.transactionId || orderId,
-          });
-        } else {
-          setConfirmedBooking({
-            id: verifyData.booking?.id || orderId,
-            category,
-            title: resourceName,
-            details: `${category === 'cricket' ? (isHindi ? 'खिलाड़ी' : 'Players') : (isHindi ? 'व्यक्ति' : 'Swimmers')}: ${playerCount} • ${durationHours} ${durationHours === 1 ? (isHindi ? 'घंटा' : 'Hour') : (isHindi ? 'घंटे' : 'Hours')}`,
-            dateTime: `${selectedDate} • ${selectedSlotTime}`,
-            personName: customerName,
-            contactNumber: customerPhone,
-            count: playerCount,
-            originalPrice,
-            discountAmount,
-            finalPaid: finalPayableAmount,
-            transactionId: verifyData.transactionId || orderId,
-          });
-        }
-
-        setCashfreeNotice(null);
-        scrollToTopSmoothly();
-      } else {
-        setFormError(
-          verifyData.error ||
-            (isHindi
-              ? 'भुगतान अधूरा या विफल रहा। स्लॉट केवल सफल भुगतान के बाद ही कन्फर्म होगा।'
-              : 'Payment not completed or failed. Booking was NOT confirmed.')
-        );
-      }
-    } catch (err: any) {
-      setFormError(err.message || 'Payment verification failed.');
-    } finally {
-      setIsSubmitting(false);
+    if (!userName) {
+      setFormError(isHindi ? 'कृपया अपना नाम दर्ज करें' : 'Please enter your name');
+      return;
     }
-  };
-
-  const handlePayWithCashfree = async () => {
-    setFormError('');
-
-    if (!agreedToTerms) {
+    if (!userPhone || userPhone.replace(/\D/g, '').length < 10) {
       setFormError(
         isHindi
-          ? 'कृपया आगे बढ़ने से पहले नियम एवं शर्तें (Terms & Conditions) को पढ़कर स्वीकार करें।'
-          : 'Please read and agree to the Terms & Conditions before completing payment.'
+          ? 'कृपया 10 अंकों का मान्य मोबाइल नंबर दर्ज करें'
+          : 'Please enter a valid 10-digit mobile number'
       );
-      setTermsHighlighted(true);
-      setTimeout(() => setTermsHighlighted(false), 3000);
       return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const customerPhoneVal = category === 'admission' ? admissionContact : customerPhone;
-      const customerNameVal = category === 'admission' ? mentorName : customerName;
-
-      // 1. Create order on server via Cashfree
-      const orderRes = await fetch('/api/payments/cashfree/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: finalPayableAmount,
-          customerName: customerNameVal,
-          customerPhone: customerPhoneVal,
-          category,
-          orderNote: `Kuchaman Sports Academy - ${category.toUpperCase()}`,
-        }),
-      });
-
-      const orderData = await orderRes.json();
-
-      if (!orderData.success) {
-        if (orderData.notConfigured) {
-          // Cashfree credentials missing in .env
-          setCashfreeNotice({
-            show: true,
-            orderId: orderData.orderId,
-            amount: finalPayableAmount,
-          });
-          setIsSubmitting(false);
-          return;
-        }
-        throw new Error(orderData.error || 'Failed to initiate Cashfree payment');
-      }
-
-      const { payment_session_id, order_id, environment } = orderData;
-
-      // 2. Dynamically import Cashfree JS SDK v3
-      const { load } = await import('@cashfreepayments/cashfree-js');
-      const cashfree = await load({
-        mode: (environment === 'production' ? 'production' : 'sandbox') as any,
-      });
-
-      // 3. Open Cashfree Checkout Modal popup
-      await cashfree.checkout({
-        paymentSessionId: payment_session_id,
-        redirectTarget: '_modal',
-      });
-
-      // 4. Verify payment with backend Cashfree API
-      await executeVerification(order_id);
-    } catch (err: any) {
-      console.warn('Cashfree payment interaction:', err);
-      // If error occurred during checkout modal close, do not auto-confirm without verify
-      setFormError(err.message || 'Payment was cancelled or could not be initiated.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Submit Booking & Confirmation (Routes according to selected payment method)
-  const handleFinalConfirmBooking = async () => {
-    if (paymentMethodType === 'cashfree') {
-      await handlePayWithCashfree();
-      return;
-    }
-
-    // Manual UPI Flow: Create pending verification booking request immediately
-    setFormError('');
-
-    // Ensure terms are confirmed
-    if (!agreedToTerms) {
-      setAgreedToTerms(true);
     }
 
     setIsSubmitting(true);
@@ -782,8 +579,8 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
         hourlyRate: slotHourlyRate,
         originalAmount: originalPrice,
         discountAmount,
-        userName: (category === 'admission' ? mentorName : customerName).trim(),
-        userPhone: (category === 'admission' ? admissionContact : customerPhone).trim(),
+        userName,
+        userPhone,
         playerCount: category === 'admission' ? Number(studentCount) || 1 : Number(playerCount) || 1,
         amountPaid: finalPayableAmount,
         paymentStatus: 'PENDING_VERIFICATION',
@@ -794,30 +591,30 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
         createdAt,
       };
 
-      // 1. Direct Firestore write for instant client cache resilience
-      try {
-        await createFirestoreBooking(bookingPayload);
-      } catch (fsErr) {
-        console.warn('Direct Firestore booking creation notice:', fsErr);
+      // 1. Directly invoke backend API (/api/bookings) immediately (no popups, no client-side Firestore bottleneck)
+      const apiRes = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bookingPayload),
+      });
+
+      const apiData = await apiRes.json().catch(() => ({}));
+
+      if (!apiRes.ok || !apiData.success) {
+        throw new Error(
+          apiData.error ||
+            (isHindi
+              ? 'बुकिंग सबमिट करने में समस्या आई। कृपया पुनः प्रयास करें।'
+              : 'Failed to submit booking for verification.')
+        );
       }
 
-      // 2. Persist via backend API (which also automatically notifies the owner via backend WhatsApp)
-      let activeBooking = bookingPayload;
-      try {
-        const apiRes = await fetch('/api/bookings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(bookingPayload),
-        });
-        if (apiRes.ok) {
-          const apiData = await apiRes.json();
-          if (apiData.booking) {
-            activeBooking = apiData.booking;
-          }
-        }
-      } catch (apiErr) {
-        console.warn('Backend booking persistence notice:', apiErr);
-      }
+      const activeBooking: Booking = apiData.booking || bookingPayload;
+
+      // 2. Client-side Firestore non-blocking background sync (never blocks API or UI)
+      createFirestoreBooking(activeBooking).catch((fsErr) => {
+        console.warn('Background Firestore booking sync notice:', fsErr);
+      });
 
       // 3. Update UI to "Booking Request Submitted" screen
       setSubmittedVerificationBooking(activeBooking);
@@ -830,7 +627,12 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
 
       scrollToTopSmoothly();
     } catch (err: any) {
-      setFormError(err?.message || 'Booking submission failed. Please try again.');
+      setFormError(
+        err?.message ||
+          (isHindi
+            ? 'सत्यापन अनुरोध सबमिट करने में विफल। कृपया पुनः प्रयास करें।'
+            : 'Booking submission failed. Please try again.')
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -1566,211 +1368,65 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 </div>
               </div>
 
-              {/* Payment Method Selector Tabs */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-neutral-600 uppercase tracking-wide">
-                  {isHindi ? 'भुगतान माध्यम चुनें' : 'Choose Payment Method'}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethodType('cashfree')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      paymentMethodType === 'cashfree'
-                        ? 'border-[#2C1A0E] bg-[#FAF8F5] shadow-sm ring-2 ring-[#2C1A0E]/15'
-                        : 'border-neutral-200 bg-white hover:border-neutral-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs sm:text-sm font-black text-[#2C1A0E] flex items-center gap-1.5">
-                        <Zap className="w-4 h-4 text-emerald-600 fill-emerald-600" />
-                        <span>Cashfree PG</span>
-                      </span>
-                      {paymentMethodType === 'cashfree' && (
-                        <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">✓</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-emerald-700 font-bold mt-1">
-                      {isHindi ? '⚡ UPI, कार्ड, नेटबैंकिंग (तत्काल)' : '⚡ UPI, Cards, NetBanking'}
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethodType('manual_upi')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      paymentMethodType === 'manual_upi'
-                        ? 'border-[#2C1A0E] bg-[#FAF8F5] shadow-sm ring-2 ring-[#2C1A0E]/15'
-                        : 'border-neutral-200 bg-white hover:border-neutral-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs sm:text-sm font-black text-[#2C1A0E] flex items-center gap-1.5">
-                        <QrCode className="w-4 h-4 text-neutral-600" />
-                        <span>{isHindi ? 'डायरेक्ट QR' : 'Direct QR'}</span>
-                      </span>
-                      {paymentMethodType === 'manual_upi' && (
-                        <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">✓</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-neutral-500 font-medium mt-1">
-                      {isHindi ? 'मैन्युअल UPI व UTR' : 'Manual UPI & UTR'}
-                    </p>
-                  </button>
-                </div>
-              </div>
-
-              {/* Cashfree Payment Gateway Box */}
-              {paymentMethodType === 'cashfree' ? (
-                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/70 via-stone-50 to-amber-50/40 border border-emerald-200/80 space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-black text-xs shadow-sm">
-                        CF
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-black text-neutral-900 leading-tight">
-                          Cashfree Payment Gateway
-                        </h4>
-                        <p className="text-[11px] text-emerald-800 font-semibold">
-                          {isHindi ? '100% सुरक्षित भुगतान • सफल होने पर ही एडमिशन कन्फर्म' : '100% Secure • Instant Admission Confirmation'}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                      {isHindi ? 'आधिकारिक' : 'Official'}
-                    </span>
-                  </div>
-
-                  {/* Supported channels */}
-                  <div className="grid grid-cols-3 gap-2 pt-1">
-                    <div className="p-2 rounded-xl bg-white border border-neutral-200/80 text-center shadow-2xs">
-                      <p className="text-xs font-black text-neutral-800">⚡ UPI</p>
-                      <p className="text-[10px] text-neutral-500">GPay, PhonePe, Paytm</p>
-                    </div>
-                    <div className="p-2 rounded-xl bg-white border border-neutral-200/80 text-center shadow-2xs">
-                      <p className="text-xs font-black text-neutral-800">💳 Cards</p>
-                      <p className="text-[10px] text-neutral-500">Visa, RuPay, Master</p>
-                    </div>
-                    <div className="p-2 rounded-xl bg-white border border-neutral-200/80 text-center shadow-2xs">
-                      <p className="text-xs font-black text-neutral-800">🏦 NetBanking</p>
-                      <p className="text-[10px] text-neutral-500">50+ Top Banks</p>
-                    </div>
-                  </div>
-
-                  {/* Strict Confirmation Rule Notice */}
-                  <div className="flex items-start gap-2 p-2.5 rounded-xl bg-emerald-100/60 border border-emerald-300/60 text-emerald-950 text-xs leading-relaxed">
-                    <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold">
-                        {isHindi ? 'कन्फर्मेशन नियम: ' : 'Confirmation Policy: '}
-                      </span>
-                      <span>
-                        {isHindi
-                          ? 'भुगतान सफल होने पर ही एडमिशन स्वतः कन्फर्म होगा व रसीद जारी होगी।'
-                          : 'Admission is confirmed only after payment is verified as successful.'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Sandbox test helper if credentials need setup */}
-                  {cashfreeNotice?.show && (
-                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs space-y-2">
-                      <div className="flex items-start gap-2 text-amber-900">
-                        <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-black">
-                            {isHindi ? 'Cashfree क्रेडेंशियल्स आवश्यक (Setup Notice)' : 'Cashfree Setup Notice'}
-                          </p>
-                          <p className="text-[11px] text-amber-800">
-                            {isHindi
-                              ? 'लाइव पेमेंट्स के लिए CASHFREE_APP_ID और CASHFREE_SECRET_KEY सेट करें। अभी आप टेस्ट सिमुलेटर से परीक्षण कर सकते हैं:'
-                              : 'Add CASHFREE_APP_ID & CASHFREE_SECRET_KEY in environment to process live payments. You can test the payment gate below:'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => executeVerification(cashfreeNotice.orderId, true)}
-                          className="flex-1 py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs transition-all cursor-pointer shadow-xs active:scale-98"
-                        >
-                          {isHindi ? '✓ सफल भुगतान सिमुलेट करें (Test Success)' : '✓ Simulate Payment Success'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormError(isHindi ? 'भुगतान अस्वीकार हुआ। एडमिशन बुक नहीं हुआ।' : 'Payment rejected. Admission not confirmed.');
-                          }}
-                          className="py-2 px-3 rounded-lg bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-bold text-xs transition-all cursor-pointer active:scale-98"
-                        >
-                          {isHindi ? '✕ विफलता परीक्षण' : '✕ Test Failure'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Manual UPI QR Block */
-                <div className="space-y-4">
-                  <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-col items-center text-center space-y-3">
-                    <div className="p-3 bg-white rounded-2xl border-2 border-neutral-200 shadow-sm">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={qrImageUrl}
-                        alt="KSA UPI QR Code"
-                        className="w-48 h-48 sm:w-52 sm:h-52 object-contain"
-                      />
-                    </div>
-
-                    <div className="w-full max-w-sm space-y-2">
-                      <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-neutral-200 text-xs">
-                        <span className="text-neutral-500 font-bold">UPI ID:</span>
-                        <span className="font-mono font-black text-neutral-900">{upiId}</span>
-                        <button
-                          type="button"
-                          onClick={handleCopyUpi}
-                          className="px-2.5 py-1 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-bold flex items-center gap-1 active:scale-95"
-                        >
-                          {copiedUpi ? (
-                            <>
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>{isHindi ? 'कॉपी हुआ' : 'Copied'}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" />
-                              <span>{isHindi ? 'कॉपी' : 'Copy'}</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      <a
-                        href={upiPayUrl}
-                        className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-98"
-                      >
-                        <span>📱 {isHindi ? 'UPI ऐप खोलें (GPay / PhonePe / Paytm)' : 'Open UPI App to Pay'}</span>
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                      {isHindi
-                        ? 'पेमेंट UTR / संदर्भ संख्या (Transaction / UTR No.)'
-                        : 'Transaction / UTR Number'}
-                    </label>
-                    <input
-                      type="text"
-                      value={transactionId}
-                      onChange={(e) => setTransactionId(e.target.value)}
-                      placeholder={isHindi ? 'उदा. 4239XXXXXXXX या UPI Ref No.' : 'e.g. 4239XXXXXXXX'}
-                      className="w-full h-12 px-4 rounded-xl border border-neutral-300 focus:border-[#2C1A0E] text-sm font-mono font-semibold text-neutral-900 bg-white outline-none"
+              {/* Direct UPI QR Payment Block */}
+              <div className="space-y-4">
+                <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-col items-center text-center space-y-3">
+                  <div className="p-3 bg-white rounded-2xl border-2 border-neutral-200 shadow-sm">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrImageUrl}
+                      alt="KSA UPI QR Code"
+                      className="w-48 h-48 sm:w-52 sm:h-52 object-contain"
                     />
                   </div>
+
+                  <div className="w-full max-w-sm space-y-2">
+                    <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-neutral-200 text-xs">
+                      <span className="text-neutral-500 font-bold">UPI ID:</span>
+                      <span className="font-mono font-black text-neutral-900">{upiId}</span>
+                      <button
+                        type="button"
+                        onClick={handleCopyUpi}
+                        className="px-2.5 py-1 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-bold flex items-center gap-1 active:scale-95"
+                      >
+                        {copiedUpi ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>{isHindi ? 'कॉपी हुआ' : 'Copied'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>{isHindi ? 'कॉपी' : 'Copy'}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <a
+                      href={upiPayUrl}
+                      className="w-full h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-98"
+                    >
+                      <span>📱 {isHindi ? 'UPI ऐप खोलें (GPay / PhonePe / Paytm)' : 'Open UPI App to Pay'}</span>
+                    </a>
+                  </div>
                 </div>
-              )}
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
+                    {isHindi
+                      ? 'पेमेंट UTR / संदर्भ संख्या (Transaction / UTR No.) - वैकल्पिक'
+                      : 'Transaction / UTR Number (Optional)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={transactionId}
+                    onChange={(e) => setTransactionId(e.target.value)}
+                    placeholder={isHindi ? 'उदा. 4239XXXXXXXX या UPI Ref No.' : 'e.g. 4239XXXXXXXX'}
+                    className="w-full h-12 px-4 rounded-xl border border-neutral-300 focus:border-[#2C1A0E] text-sm font-mono font-semibold text-neutral-900 bg-white outline-none"
+                  />
+                </div>
+              </div>
 
               {/* Terms & Conditions Acceptance Checkbox */}
               <div
@@ -1818,32 +1474,30 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 </label>
               </div>
 
-              {/* Action Button */}
+              {/* Action Button: Directly submit for verification */}
               <button
+                id="submit-admission-verification-btn"
                 type="button"
                 disabled={isSubmitting}
                 onClick={handleFinalConfirmBooking}
-                className={`w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 cursor-pointer ${
-                  agreedToTerms
-                    ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
-                    : 'bg-neutral-200 hover:bg-neutral-300 text-neutral-700 border border-neutral-300'
-                } disabled:opacity-50`}
+                className="w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 cursor-pointer bg-[#1b4332] hover:bg-[#2d6a4f] text-white shadow-emerald-950/20 disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>{isHindi ? 'भुगतान प्रक्रियाधीन है...' : 'Processing Payment...'}</span>
+                    <span>
+                      {isHindi
+                        ? 'सत्यापन अनुरोध सबमिट हो रहा है...'
+                        : 'Submitting Admission for Verification...'}
+                    </span>
                   </span>
                 ) : (
                   <>
+                    <ShieldAlert className="w-5 h-5 text-amber-300" />
                     <span>
-                      {paymentMethodType === 'cashfree'
-                        ? isHindi
-                          ? `⚡ Cashfree से ₹${finalPayableAmount} भुगतान करें व एडमिशन लें`
-                          : `⚡ Pay ₹${finalPayableAmount} with Cashfree & Confirm`
-                        : isHindi
-                        ? `✓ ₹${finalPayableAmount} भुगतान पूरा करें व एडमिशन कन्फर्म करें`
-                        : `✓ Pay ₹${finalPayableAmount} & Confirm Admission`}
+                      {isHindi
+                        ? 'सत्यापन हेतु एडमिशन सबमिट करें (Submit Admission for Verification)'
+                        : 'Submit Admission for Verification'}
                     </span>
                     <ArrowRight className="w-5 h-5" />
                   </>
@@ -2272,232 +1926,86 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 </div>
               </div>
 
-              {/* Payment Method Selector Tabs */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-neutral-600 uppercase tracking-wide">
-                  {isHindi ? 'भुगतान माध्यम चुनें' : 'Choose Payment Method'}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethodType('cashfree')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      paymentMethodType === 'cashfree'
-                        ? 'border-[#2C1A0E] bg-[#FAF8F5] shadow-sm ring-2 ring-[#2C1A0E]/15'
-                        : 'border-neutral-200 bg-white hover:border-neutral-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs sm:text-sm font-black text-[#2C1A0E] flex items-center gap-1.5">
-                        <Zap className="w-4 h-4 text-emerald-600 fill-emerald-600" />
-                        <span>Cashfree PG</span>
-                      </span>
-                      {paymentMethodType === 'cashfree' && (
-                        <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">✓</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-emerald-700 font-bold mt-1">
-                      {isHindi ? '⚡ UPI, कार्ड, नेटबैंकिंग (तत्काल)' : '⚡ UPI, Cards, NetBanking'}
-                    </p>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethodType('manual_upi')}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                      paymentMethodType === 'manual_upi'
-                        ? 'border-[#2C1A0E] bg-[#FAF8F5] shadow-sm ring-2 ring-[#2C1A0E]/15'
-                        : 'border-neutral-200 bg-white hover:border-neutral-300'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs sm:text-sm font-black text-[#2C1A0E] flex items-center gap-1.5">
-                        <QrCode className="w-4 h-4 text-neutral-600" />
-                        <span>{isHindi ? 'डायरेक्ट QR' : 'Direct QR'}</span>
-                      </span>
-                      {paymentMethodType === 'manual_upi' && (
-                        <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">✓</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-neutral-500 font-medium mt-1">
-                      {isHindi ? 'मैन्युअल UPI व UTR' : 'Manual UPI & UTR'}
-                    </p>
-                  </button>
-                </div>
-              </div>
-
-              {/* Cashfree Payment Gateway Box */}
-              {paymentMethodType === 'cashfree' ? (
-                <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-emerald-50/70 via-stone-50 to-amber-50/40 border border-emerald-200/80 space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-emerald-700 text-white flex items-center justify-center font-black text-xs shadow-sm">
-                        CF
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-black text-neutral-900 leading-tight">
-                          Cashfree Payment Gateway
-                        </h4>
-                        <p className="text-[11px] text-emerald-800 font-semibold">
-                          {isHindi ? '100% सुरक्षित भुगतान • सफल होने पर ही स्लॉट स्वतः बुक होगा' : '100% Secure • Slot Confirmed On Payment Success'}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                      {isHindi ? 'आधिकारिक' : 'Official'}
-                    </span>
+              {/* Direct UPI QR Payment Block */}
+              <div className="space-y-4">
+                <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-col items-center text-center space-y-3">
+                  <div className="p-3 bg-white rounded-2xl border-2 border-neutral-200 shadow-sm">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={qrImageUrl}
+                      alt="KSA UPI QR Code"
+                      className="w-48 h-48 sm:w-52 sm:h-52 object-contain"
+                    />
                   </div>
 
-                  {/* Supported channels */}
-                  <div className="grid grid-cols-3 gap-2 pt-1">
-                    <div className="p-2 rounded-xl bg-white border border-neutral-200/80 text-center shadow-2xs">
-                      <p className="text-xs font-black text-neutral-800">⚡ UPI</p>
-                      <p className="text-[10px] text-neutral-500">GPay, PhonePe, Paytm</p>
-                    </div>
-                    <div className="p-2 rounded-xl bg-white border border-neutral-200/80 text-center shadow-2xs">
-                      <p className="text-xs font-black text-neutral-800">💳 Cards</p>
-                      <p className="text-[10px] text-neutral-500">Visa, RuPay, Master</p>
-                    </div>
-                    <div className="p-2 rounded-xl bg-white border border-neutral-200/80 text-center shadow-2xs">
-                      <p className="text-xs font-black text-neutral-800">🏦 NetBanking</p>
-                      <p className="text-[10px] text-neutral-500">50+ Top Banks</p>
-                    </div>
-                  </div>
-
-                  {/* Strict Confirmation Rule Notice */}
-                  <div className="flex items-start gap-2 p-2.5 rounded-xl bg-emerald-100/60 border border-emerald-300/60 text-emerald-950 text-xs leading-relaxed">
-                    <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold">
-                        {isHindi ? 'कन्फर्मेशन गारंटी: ' : 'Confirmation Policy: '}
-                      </span>
-                      <span>
-                        {isHindi
-                          ? 'भुगतान सफल होने पर ही स्लॉट स्वतः लॉक व कन्फर्म होगा। यदि पेमेंट पूरा नहीं होता है तो स्लॉट बुक नहीं होगा।'
-                          : 'The slot is automatically confirmed and locked only after successful payment. Incomplete attempts will not reserve the slot.'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Sandbox test helper if credentials need setup */}
-                  {cashfreeNotice?.show && (
-                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs space-y-2">
-                      <div className="flex items-start gap-2 text-amber-900">
-                        <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-black">
-                            {isHindi ? 'Cashfree क्रेडेंशियल्स आवश्यक (Setup Notice)' : 'Cashfree Setup Notice'}
-                          </p>
-                          <p className="text-[11px] text-amber-800">
-                            {isHindi
-                              ? 'लाइव पेमेंट्स के लिए CASHFREE_APP_ID और CASHFREE_SECRET_KEY सेट करें। अभी आप टेस्ट सिमुलेटर से परीक्षण कर सकते हैं:'
-                              : 'Add CASHFREE_APP_ID & CASHFREE_SECRET_KEY in environment to process live payments. You can test the payment gate below:'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => executeVerification(cashfreeNotice.orderId, true)}
-                          className="flex-1 py-2 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs transition-all cursor-pointer shadow-xs active:scale-98"
-                        >
-                          {isHindi ? '✓ सफल भुगतान सिमुलेट करें (Test Success)' : '✓ Simulate Payment Success'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormError(isHindi ? 'भुगतान अस्वीकार हुआ। स्लॉट बुक नहीं हुआ।' : 'Payment rejected. Booking not confirmed.');
-                          }}
-                          className="py-2 px-3 rounded-lg bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-bold text-xs transition-all cursor-pointer active:scale-98"
-                        >
-                          {isHindi ? '✕ विफलता परीक्षण' : '✕ Test Failure'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Manual UPI QR Block */
-                <div className="space-y-4">
-                  <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200 flex flex-col items-center text-center space-y-3">
-                    <div className="p-3 bg-white rounded-2xl border-2 border-neutral-200 shadow-sm">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={qrImageUrl}
-                        alt="KSA UPI QR Code"
-                        className="w-48 h-48 sm:w-52 sm:h-52 object-contain"
-                      />
-                    </div>
-
-                    <div className="w-full max-w-sm space-y-2">
-                      <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-neutral-200 text-xs">
-                        <span className="text-neutral-500 font-bold">UPI ID:</span>
-                        <span className="font-mono font-black text-neutral-900">{upiId}</span>
-                        <button
-                          type="button"
-                          onClick={handleCopyUpi}
-                          className="px-2.5 py-1 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-bold flex items-center gap-1 active:scale-95"
-                        >
-                          {copiedUpi ? (
-                            <>
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>{isHindi ? 'कॉपी हुआ' : 'Copied'}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" />
-                              <span>{isHindi ? 'कॉपी' : 'Copy'}</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Primary Button: "Choose your preferred UPI app" */}
+                  <div className="w-full max-w-sm space-y-2">
+                    <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-neutral-200 text-xs">
+                      <span className="text-neutral-500 font-bold">UPI ID:</span>
+                      <span className="font-mono font-black text-neutral-900">{upiId}</span>
                       <button
                         type="button"
-                        onClick={handleChooseUpiApp}
-                        className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98 cursor-pointer"
+                        onClick={handleCopyUpi}
+                        className="px-2.5 py-1 rounded-md bg-neutral-100 hover:bg-neutral-200 text-neutral-800 font-bold flex items-center gap-1 active:scale-95"
                       >
-                        <Smartphone className="w-4 h-4" />
-                        <span>
-                          {isHindi
-                            ? 'अपना पसंदीदा UPI ऐप चुनें (Choose your preferred UPI app)'
-                            : 'Choose your preferred UPI app'}
-                        </span>
+                        {copiedUpi ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>{isHindi ? 'कॉपी हुआ' : 'Copied'}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>{isHindi ? 'कॉपी' : 'Copy'}</span>
+                          </>
+                        )}
                       </button>
                     </div>
-                  </div>
 
-                  {/* Direct Transaction / UTR Input (Optional) */}
-                  <div className="space-y-4">
-                    {hasOpenedUpi && (
-                      <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-center flex items-center justify-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <p className="text-xs text-emerald-900 font-bold">
-                          {isHindi
-                            ? 'UPI ऐप से भुगतान पूरा होने के बाद कृपया नीचे तुरंत सत्यापन हेतु बुकिंग सबमिट करें।'
-                            : 'After completing payment in your UPI app, please submit booking for verification below.'}
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5">
-                      <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
+                    {/* Primary Button: "Choose your preferred UPI app" */}
+                    <button
+                      type="button"
+                      onClick={handleChooseUpiApp}
+                      className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-sm active:scale-98 cursor-pointer"
+                    >
+                      <Smartphone className="w-4 h-4" />
+                      <span>
                         {isHindi
-                          ? 'पेमेंट UTR / संदर्भ संख्या (Transaction / UTR No.) - वैकल्पिक'
-                          : 'Transaction / UTR Number (Optional)'}
-                      </label>
-                      <input
-                        type="text"
-                        value={transactionId}
-                        onChange={(e) => setTransactionId(e.target.value)}
-                        placeholder={isHindi ? 'उदा. 4239XXXXXXXX या UPI Ref No.' : 'e.g. 4239XXXXXXXX'}
-                        className="w-full h-12 px-4 rounded-xl border border-neutral-300 focus:border-[#2C1A0E] text-sm font-mono font-semibold text-neutral-900 bg-white outline-none"
-                      />
-                    </div>
+                          ? 'अपना पसंदीदा UPI ऐप चुनें (Choose your preferred UPI app)'
+                          : 'Choose your preferred UPI app'}
+                      </span>
+                    </button>
                   </div>
                 </div>
-              )}
+
+                {/* Direct Transaction / UTR Input (Optional) */}
+                <div className="space-y-4">
+                  {hasOpenedUpi && (
+                    <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-center flex items-center justify-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <p className="text-xs text-emerald-900 font-bold">
+                        {isHindi
+                          ? 'UPI ऐप से भुगतान पूरा होने के बाद कृपया नीचे तुरंत सत्यापन हेतु बुकिंग सबमिट करें।'
+                          : 'After completing payment in your UPI app, please submit booking for verification below.'}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
+                      {isHindi
+                        ? 'पेमेंट UTR / संदर्भ संख्या (Transaction / UTR No.) - वैकल्पिक'
+                        : 'Transaction / UTR Number (Optional)'}
+                    </label>
+                    <input
+                      type="text"
+                      value={transactionId}
+                      onChange={(e) => setTransactionId(e.target.value)}
+                      placeholder={isHindi ? 'उदा. 4239XXXXXXXX या UPI Ref No.' : 'e.g. 4239XXXXXXXX'}
+                      className="w-full h-12 px-4 rounded-xl border border-neutral-300 focus:border-[#2C1A0E] text-sm font-mono font-semibold text-neutral-900 bg-white outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
 
               {/* Terms & Conditions Acceptance Checkbox */}
               <div
@@ -2545,54 +2053,32 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 </label>
               </div>
 
-              {/* Action Button: Immediately accessible for 1-click verification */}
+              {/* Action Button: Immediately accessible for 1-click verification directly calling /api/bookings */}
               <button
+                id="submit-booking-verification-btn"
                 type="button"
                 disabled={isSubmitting}
                 onClick={handleFinalConfirmBooking}
-                className={`w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 cursor-pointer ${
-                  agreedToTerms
-                    ? paymentMethodType === 'manual_upi'
-                      ? 'bg-[#1b4332] hover:bg-[#2d6a4f] text-white shadow-emerald-950/20'
-                      : 'bg-emerald-700 hover:bg-emerald-800 text-white'
-                    : 'bg-neutral-200 hover:bg-neutral-300 text-neutral-700 border border-neutral-300'
-                } disabled:opacity-50`}
+                className="w-full h-14 rounded-2xl font-black text-base flex items-center justify-center gap-2 transition-all shadow-lg active:scale-98 cursor-pointer bg-[#1b4332] hover:bg-[#2d6a4f] text-white shadow-emerald-950/20 disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <span className="flex items-center gap-2">
                     <Loader2 className="w-5 h-5 animate-spin" />
                     <span>
-                      {paymentMethodType === 'manual_upi'
-                        ? isHindi
-                          ? 'सत्यापन अनुरोध सबमिट हो रहा है...'
-                          : 'Submitting Booking for Verification...'
-                        : isHindi
-                        ? 'भुगतान प्रक्रियाधीन है...'
-                        : 'Processing Payment...'}
+                      {isHindi
+                        ? 'सत्यापन अनुरोध सबमिट हो रहा है...'
+                        : 'Submitting Booking for Verification...'}
                     </span>
                   </span>
                 ) : (
                   <>
-                    {paymentMethodType === 'manual_upi' ? (
-                      <>
-                        <ShieldAlert className="w-5 h-5 text-amber-300" />
-                        <span>
-                          {isHindi
-                            ? 'सत्यापन हेतु बुकिंग सबमिट करें (Submit Booking for Verification)'
-                            : 'Submit Booking for Verification'}
-                        </span>
-                        <ArrowRight className="w-5 h-5" />
-                      </>
-                    ) : (
-                      <>
-                        <span>
-                          {isHindi
-                            ? `⚡ Cashfree से ₹${finalPayableAmount} भुगतान करें व बुकिंग कन्फर्म करें`
-                            : `⚡ Pay ₹${finalPayableAmount} with Cashfree & Confirm`}
-                        </span>
-                        <ArrowRight className="w-5 h-5" />
-                      </>
-                    )}
+                    <ShieldAlert className="w-5 h-5 text-amber-300" />
+                    <span>
+                      {isHindi
+                        ? 'सत्यापन हेतु बुकिंग सबमिट करें (Submit Booking for Verification)'
+                        : 'Submit Booking for Verification'}
+                    </span>
+                    <ArrowRight className="w-5 h-5" />
                   </>
                 )}
               </button>
