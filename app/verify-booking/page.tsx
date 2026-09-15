@@ -13,6 +13,9 @@ import {
   AlertTriangle,
   RefreshCw,
   Home,
+  Lock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -44,6 +47,21 @@ function VerifyBookingContent() {
   const [booking, setBooking] = useState<BookingInfo | null>(null);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
+  // Security: Admin / Owner Password state
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // Remember admin password if already entered previously in this session/browser
+  useEffect(() => {
+    try {
+      const saved =
+        sessionStorage.getItem('ksa_admin_verify_password') ||
+        localStorage.getItem('ksa_admin_verify_password');
+      if (saved) setPassword(saved);
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (!id || !token) {
       setError('बुकिंग ID या सत्यापन टोकन नहीं मिला (Missing ID or Token)');
@@ -51,28 +69,22 @@ function VerifyBookingContent() {
       return;
     }
 
-    const verifyOrFetch = async () => {
+    const fetchBookingDetails = async () => {
       try {
         setLoading(true);
-        // Build url with initial action if present
-        let url = `/api/bookings/verify?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`;
-        if (initialAction) {
-          url += `&action=${encodeURIComponent(initialAction)}`;
-        }
-
+        // Security: DO NOT execute approve/reject automatically on page load
+        // Simply fetch booking details so the owner can view and enter password
+        const url = `/api/bookings/verify?id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`;
         const res = await fetch(url);
         const data = await res.json();
 
         if (!res.ok || !data.success) {
-          setError(data.error || 'सत्यापन विफल रहा (Verification failed)');
+          setError(data.error || 'सत्यापन विवरण प्राप्त करने में विफल (Fetch failed)');
           setLoading(false);
           return;
         }
 
         setBooking(data.booking);
-        if (data.message) {
-          setFeedbackMessage(data.message);
-        }
       } catch (err: any) {
         setError(err?.message || 'सर्वर से कनेक्ट नहीं हो सका');
       } finally {
@@ -80,24 +92,44 @@ function VerifyBookingContent() {
       }
     };
 
-    verifyOrFetch();
-  }, [id, initialAction, token]);
+    fetchBookingDetails();
+  }, [id, token]);
 
   const handleAction = async (action: 'approve' | 'reject') => {
     if (!id || !token) return;
+
+    if (!password.trim()) {
+      setPasswordError('कृपया सत्यापन के लिए एडमिन पासवर्ड (KSA2026) दर्ज करें');
+      return;
+    }
+
     try {
       setUpdating(true);
       setError(null);
+      setPasswordError(null);
+
       const res = await fetch('/api/bookings/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action, token }),
+        body: JSON.stringify({ id, action, token, password: password.trim() }),
       });
+
       const data = await res.json();
       if (!res.ok || !data.success) {
-        setError(data.error || 'अद्यतन विफल रहा');
+        if (data.code === 'INVALID_PASSWORD' || res.status === 401) {
+          setPasswordError(data.error || 'गलत पासवर्ड! कृपया सही एडमिन पासवर्ड (KSA2026) दर्ज करें।');
+        } else {
+          setError(data.error || 'अद्यतन विफल रहा');
+        }
         return;
       }
+
+      // Cache validated password for owner convenience
+      try {
+        sessionStorage.setItem('ksa_admin_verify_password', password.trim());
+        localStorage.setItem('ksa_admin_verify_password', password.trim());
+      } catch {}
+
       setBooking(data.booking);
       setFeedbackMessage(data.message);
     } catch (err: any) {
@@ -294,12 +326,50 @@ function VerifyBookingContent() {
 
             {/* Quick Action Buttons for Owner */}
             <div className="pt-2 space-y-3">
-              <div className="text-center text-xs text-neutral-400 font-medium">
+              {/* Security Admin Password Input */}
+              <div className="p-4 rounded-2xl bg-neutral-800/90 border border-amber-500/40 space-y-2.5 shadow-lg">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5" />
+                    ओनर / एडमिन पासवर्ड (Admin Password Required)
+                  </span>
+                  <span className="text-[11px] text-neutral-400 font-mono">डिफ़ॉल्ट: KSA2026</span>
+                </div>
+
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (passwordError) setPasswordError(null);
+                    }}
+                    placeholder="एडमिन पासवर्ड दर्ज करें (KSA2026)"
+                    className="w-full h-11 px-3.5 pr-10 rounded-xl bg-neutral-900 border border-neutral-700 focus:border-amber-400 text-white font-mono text-sm outline-none transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {passwordError && (
+                  <p className="text-rose-400 text-xs font-semibold flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{passwordError}</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="text-center text-xs text-neutral-400 font-medium pt-1">
                 {isConfirmed
                   ? 'यदि आपने गलती से स्वीकृति (YES) दी थी, तो आप यहाँ से रिजेक्ट कर सकते हैं:'
                   : isRejected
                   ? 'यदि ग्राहक का पेमेंट अब बैंक खाते में आ गया है, तो आप यहाँ से कन्फर्म कर सकते हैं:'
-                  : 'कृपया बैंक में पैसे चेक करके सही बटन दबाएं:'}
+                  : 'पासवर्ड दर्ज करके नीचे दिए गए बटन पर निर्णय लें:'}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -311,9 +381,13 @@ function VerifyBookingContent() {
                     isConfirmed
                       ? 'bg-emerald-800/40 text-emerald-300 border border-emerald-600/40 cursor-default opacity-80'
                       : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40 active:scale-95'
-                  }`}
+                  } ${initialAction === 'approve' || initialAction === 'yes' ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-neutral-900' : ''}`}
                 >
-                  <CheckCircle2 className="w-4 h-4" />
+                  {updating ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4" />
+                  )}
                   {isConfirmed ? 'स्वीकृत है (Approved)' : '✅ YES (कन्फर्म करें)'}
                 </button>
 
@@ -325,9 +399,13 @@ function VerifyBookingContent() {
                     isRejected
                       ? 'bg-rose-800/40 text-rose-300 border border-rose-600/40 cursor-default opacity-80'
                       : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/40 active:scale-95'
-                  }`}
+                  } ${initialAction === 'reject' || initialAction === 'no' ? 'ring-2 ring-rose-400 ring-offset-2 ring-offset-neutral-900' : ''}`}
                 >
-                  <XCircle className="w-4 h-4" />
+                  {updating ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <XCircle className="w-4 h-4" />
+                  )}
                   {isRejected ? 'अस्वीकृत है (Rejected)' : '❌ NO (रिजेक्ट करें)'}
                 </button>
               </div>

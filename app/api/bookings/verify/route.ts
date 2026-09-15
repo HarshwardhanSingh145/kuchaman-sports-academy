@@ -7,12 +7,20 @@ import {
   getFirestoreBookings,
 } from '@/lib/firestore-service';
 
+const VALID_ADMIN_PASSWORDS = ['ksa2026', 'kuchaman2026', 'ksa@2026'];
+
+function isValidAdminPassword(pass?: string | null): boolean {
+  if (!pass || typeof pass !== 'string') return false;
+  return VALID_ADMIN_PASSWORDS.includes(pass.trim().toLowerCase());
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
     const action = searchParams.get('action');
     const token = searchParams.get('token');
+    const password = searchParams.get('password');
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'Booking ID is required' }, { status: 400 });
@@ -53,9 +61,14 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // If no action is specified, return booking details for view
-    if (!action) {
-      return NextResponse.json({ success: true, booking });
+    // Security: If no action, or no valid password provided, return booking details for UI password prompt
+    if (!action || !isValidAdminPassword(password)) {
+      return NextResponse.json({
+        success: true,
+        booking,
+        requiresPassword: true,
+        pendingAction: action ? action.toLowerCase() : null,
+      });
     }
 
     const normalizedAction = action.toLowerCase();
@@ -169,7 +182,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { id, action, token } = body;
+    const { id, action, token, password } = body;
 
     if (!id || !action) {
       return NextResponse.json({ success: false, error: 'ID and action are required' }, { status: 400 });
@@ -179,6 +192,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'अमान्य वेरिफिकेशन टोकन (Invalid token)' },
         { status: 403 }
+      );
+    }
+
+    if (!password || !isValidAdminPassword(password)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'गलत या अनुपलब्ध एडमिन पासवर्ड! कृपया सही पासवर्ड (KSA2026) दर्ज करें।',
+          code: 'INVALID_PASSWORD',
+        },
+        { status: 401 }
       );
     }
 

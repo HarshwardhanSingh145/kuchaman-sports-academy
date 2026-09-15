@@ -162,26 +162,15 @@ export function buildOwnerVerificationMessage(
       : nowIST);
 
   return (
-    `🔔 *नया बुकिंग व पेमेंट सत्यापन अनुरोध (KSA)*\n\n` +
-    `👤 *ग्राहक का नाम:* ${booking.userName}\n` +
-    `📱 *मोबाइल नंबर:* ${booking.userPhone}\n` +
-    `⏰ *तारीख व स्लॉट:* ${booking.date} (${booking.timeRange || 'चयनित स्लॉट'})\n` +
-    `⏱️ *पेमेंट सबमिशन समय:* ${paymentTime}\n` +
-    `🏏 *खेल / सुविधा:* ${sportLabel}${resourceLabel}\n` +
-    `💰 *भुगतान राशि:* ₹${booking.amountPaid}\n` +
-    `🆔 *बुकिंग ID:* ${booking.id}\n` +
-    (booking.transactionId ? `🔢 *UTR / Ref No:* ${booking.transactionId}\n` : '') +
-    `\n📢 *सूचना:* ग्राहक *${booking.userName}* ने *${booking.date} (${booking.timeRange || 'स्लॉट'})* के लिए *₹${booking.amountPaid}* का भुगतान सबमिट किया है।\n\n` +
-    `⚠️ *कृपया अपने बैंक खाते / PhonePe / GPay में चेक करें कि क्या ₹${booking.amountPaid} आ गए हैं?*\n\n` +
-    `━━━━━━━━━━━━━━━━━━━\n` +
-    `👇 *फैसला लें (1-क्लिक वेरिफिकेशन):*\n\n` +
-    `✅ *YES (पेमेंट आ गया है - तुरंत कन्फर्म करें):*\n` +
+    `🔔 *KSA बुकिंग सत्यापन*\n\n` +
+    `👤 *नाम:* ${booking.userName}\n` +
+    `📱 *फ़ोन:* ${booking.userPhone}\n` +
+    `⏱️ *समय:* ${paymentTime}\n` +
+    `💰 *राशि:* ₹${booking.amountPaid} (${booking.id})\n\n` +
+    `✅ *YES (कन्फर्म करें):*\n` +
     `${yesLink}\n\n` +
-    `❌ *NO (पेमेंट नहीं आया - तुरंत रिजेक्ट करें):*\n` +
-    `${noLink}\n` +
-    `━━━━━━━━━━━━━━━━━━━\n` +
-    `💬 *ग्राहक से सीधे चैट:* ${clientWaLink}\n` +
-    `💡 *नोट:* आपके YES या NO पर क्लिक करते ही वेबसाइट पर ग्राहक की स्क्रीन लाइव कन्फर्म हो जाएगी और ग्राहक को तत्काल WhatsApp मैसेज पहुँच जाएगा।`
+    `❌ *NO (रिजेक्ट करें):*\n` +
+    `${noLink}`
   );
 }
 
