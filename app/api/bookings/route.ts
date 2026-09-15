@@ -124,6 +124,7 @@ export async function POST(req: NextRequest) {
           timeRange: result.booking.timeRange,
           durationHours: result.booking.durationHours,
           transactionId: result.booking.transactionId,
+          createdAt: result.booking.createdAt,
         }, baseUrl, targetOwnerWhatsApp);
       } catch (notifyErr) {
         console.warn('Owner notification notice:', notifyErr);

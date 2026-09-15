@@ -550,6 +550,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
       const prefix = category === 'cricket' ? 'KSA-CRK' : category === 'swimming' ? 'KSA-SWM' : 'KSA-ADM';
       const generatedBookingId = `${prefix}-${randomNum}`;
       const createdAt = new Date().toISOString();
+      const currentOwnerNumber = ownerConfig.ownerWhatsAppNumber || ownerConfig.phone || '8142731917';
 
       const resourceName =
         category === 'cricket'
@@ -559,6 +560,40 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
           : category === 'swimming'
           ? 'Semi-Olympic Swimming Pool'
           : 'Academy Admission';
+
+      const nowIST = new Date().toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      });
+
+      const effectiveTxnId = transactionId.trim() || `UPI-TXN-${Date.now().toString().slice(-6)}`;
+
+      // Construct owner WhatsApp verification link with 1-click YES/NO approval
+      const ownerWaLink = generateOwnerWhatsAppLink(
+        {
+          id: generatedBookingId,
+          userName,
+          userPhone,
+          amountPaid: finalPayableAmount,
+          sport: category,
+          resourceName,
+          date: category === 'admission' ? new Date().toISOString().split('T')[0] : selectedDate,
+          timeRange: category === 'admission' ? 'Academy Admission' : selectedSlotTime,
+          durationHours: category === 'admission' ? 1 : durationHours,
+          transactionId: effectiveTxnId,
+          submissionTime: nowIST,
+          createdAt,
+        },
+        currentOwnerNumber
+      );
+
+      // AUTOMATICALLY open WhatsApp chat directly to the owner without requiring manual click on next page
+      try {
+        window.open(ownerWaLink, '_blank');
+      } catch (openErr) {
+        console.warn('Auto WhatsApp window.open notice:', openErr);
+      }
 
       const bookingPayload: Booking = {
         id: generatedBookingId,
@@ -585,7 +620,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
         amountPaid: finalPayableAmount,
         paymentStatus: 'PENDING_VERIFICATION',
         paymentMethod: 'UPI_QR',
-        transactionId: transactionId.trim() || `UPI-TXN-${Date.now().toString().slice(-6)}`,
+        transactionId: effectiveTxnId,
         paymentScreenshot: paymentScreenshot || undefined,
         status: 'AWAITING_VERIFICATION',
         createdAt,
@@ -681,6 +716,7 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
         date: submittedVerificationBooking.date,
         timeRange: submittedVerificationBooking.timeRange,
         transactionId: submittedVerificationBooking.transactionId,
+        createdAt: submittedVerificationBooking.createdAt,
       },
       currentOwnerNumber
     );
@@ -829,6 +865,25 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
               <span className="text-2xl font-black text-amber-950">₹{submittedVerificationBooking.amountPaid}</span>
             </div>
 
+            {/* Auto-dispatched WhatsApp Confirmation Banner */}
+            {isPending && (
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-300 text-xs space-y-2">
+                <div className="flex items-center gap-2 text-emerald-900 font-bold text-sm">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>
+                    {isHindi
+                      ? 'ओनर को WhatsApp मैसेज ऑटोमैटिक भेजा गया!'
+                      : 'WhatsApp Message Sent to Owner Automatically!'}
+                  </span>
+                </div>
+                <p className="text-emerald-800 text-[11.5px] leading-relaxed">
+                  {isHindi
+                    ? `एकैडमी ओनर (${cleanDisplayNumber}) के व्हाट्सएप पर ग्राहक का नाम (${submittedVerificationBooking.userName}), मोबाइल नंबर (${submittedVerificationBooking.userPhone}), भुगतान समय एवं 1-क्लिक YES/NO सत्यापन लिंक भेज दिया गया है। जैसे ही ओनर WhatsApp पर "YES" करेंगे, आपकी स्क्रीन तुरंत स्वतः कन्फर्म हो जाएगी।`
+                    : `Verification request with customer details (${submittedVerificationBooking.userName}, ${submittedVerificationBooking.userPhone}), timestamp and 1-click YES/NO links has been sent to academy owner (${cleanDisplayNumber}). Once owner clicks YES, this screen will confirm automatically.`}
+                </p>
+              </div>
+            )}
+
             {/* Live syncing banner */}
             {isPending && (
               <div className="p-3.5 bg-neutral-50 rounded-2xl border border-neutral-200/80 text-xs space-y-1.5">
@@ -859,8 +914,8 @@ export function BookingSection({ initialSport = 'cricket', onBack }: BookingSect
                 <Share2 className="w-4 h-4" />
                 <span>
                   {isHindi
-                    ? `📲 एकैडमी ओनर (${cleanDisplayNumber}) को व्हाट्सएप पर भेजें`
-                    : `📲 Send Request to Owner on WhatsApp (${cleanDisplayNumber})`}
+                    ? `📲 यदि WhatsApp स्वतः नहीं खुला तो यहाँ क्लिक करें (${cleanDisplayNumber})`
+                    : `📲 If WhatsApp Didn't Open Automatically, Click Here (${cleanDisplayNumber})`}
                 </span>
               </a>
 

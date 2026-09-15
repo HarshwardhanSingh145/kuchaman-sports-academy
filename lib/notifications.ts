@@ -21,6 +21,8 @@ export interface BookingNotificationDetails {
   timeRange: string;
   durationHours?: number;
   transactionId?: string;
+  submissionTime?: string;
+  createdAt?: string;
 }
 
 export interface NotificationResult {
@@ -44,37 +46,30 @@ export const KSA_HELPLINE_SECONDARY = '9414273191';
 /**
  * Normalizes and validates Indian phone numbers for WhatsApp integration.
  */
-export function normalizeIndianPhoneNumber(rawPhone: string): {
-  isValid: boolean;
+export function normalizeIndianPhoneNumber(phone: string): {
+  raw: string;
   clean10Digits: string;
-  internationalWithCountryCode: string; // 91XXXXXXXXXX
-  formatted: string; // +91 XXXXX XXXXX
+  internationalWithCountryCode: string;
+  isValid: boolean;
 } {
-  if (!rawPhone || typeof rawPhone !== 'string') {
-    return { isValid: false, clean10Digits: '', internationalWithCountryCode: '', formatted: '' };
-  }
-  const digits = rawPhone.replace(/\D/g, '');
-  let tenDigits = '';
-  if (digits.length === 10) {
-    tenDigits = digits;
-  } else if (digits.length === 11 && digits.startsWith('0')) {
-    tenDigits = digits.slice(1);
-  } else if (digits.length === 12 && digits.startsWith('91')) {
-    tenDigits = digits.slice(2);
-  } else if (digits.length > 10) {
-    tenDigits = digits.slice(-10);
+  const digitsOnly = (phone || '').replace(/\D/g, '');
+  let clean10 = '';
+  if (digitsOnly.length === 10) {
+    clean10 = digitsOnly;
+  } else if (digitsOnly.length === 12 && digitsOnly.startsWith('91')) {
+    clean10 = digitsOnly.slice(2);
+  } else if (digitsOnly.length > 10) {
+    clean10 = digitsOnly.slice(-10);
+  } else {
+    clean10 = digitsOnly;
   }
 
-  const isValid = /^[6-9]\d{9}$/.test(tenDigits);
-  const clean10Digits = isValid ? tenDigits : (digits.slice(-10) || digits);
-  const internationalWithCountryCode = `91${clean10Digits}`;
-  const formatted = isValid ? `+91 ${clean10Digits.slice(0, 5)} ${clean10Digits.slice(5)}` : rawPhone;
-
+  const isValid = clean10.length === 10 && /^[6-9]\d{9}$/.test(clean10);
   return {
+    raw: phone,
+    clean10Digits: clean10,
+    internationalWithCountryCode: clean10 ? `91${clean10}` : '',
     isValid,
-    clean10Digits,
-    internationalWithCountryCode,
-    formatted,
   };
 }
 
@@ -82,12 +77,12 @@ export function normalizeIndianPhoneNumber(rawPhone: string): {
  * Resolves the active owner WhatsApp phone number dynamically.
  */
 export function resolveOwnerWhatsApp(customPhone?: string): string {
-  if (customPhone && customPhone.trim()) {
+  if (customPhone) {
     const norm = normalizeIndianPhoneNumber(customPhone);
     if (norm.isValid) return norm.internationalWithCountryCode;
   }
   const envNum = process.env.WHATSAPP_OWNER_NUMBER;
-  if (envNum && envNum.trim()) {
+  if (envNum) {
     const norm = normalizeIndianPhoneNumber(envNum);
     if (norm.isValid) return norm.internationalWithCountryCode;
   }
@@ -95,17 +90,17 @@ export function resolveOwnerWhatsApp(customPhone?: string): string {
 }
 
 /**
- * Generate a deterministic verification signature token for one-click verification
+ * Generate a deterministic verification signature token
  */
 export function generateVerificationToken(bookingId: string): string {
   const secret = process.env.VERIFICATION_SECRET || 'ksa_owner_whatsapp_secret_salt_2026';
+  const raw = `${bookingId}:${secret}:approve_or_reject`;
   let hash = 0;
-  const str = `${bookingId}_${secret}`;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+  for (let i = 0; i < raw.length; i++) {
+    hash = (hash << 5) - hash + raw.charCodeAt(i);
     hash |= 0;
   }
-  return Math.abs(hash).toString(36);
+  return Math.abs(hash).toString(36).substring(0, 10);
 }
 
 /**
@@ -151,11 +146,27 @@ export function buildOwnerVerificationMessage(
   const yesLink = `${cleanOrigin}/verify-booking?id=${encodeURIComponent(booking.id)}&action=approve&token=${token}`;
   const noLink = `${cleanOrigin}/verify-booking?id=${encodeURIComponent(booking.id)}&action=reject&token=${token}`;
 
+  const nowIST = new Date().toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+  const paymentTime =
+    booking.submissionTime ||
+    (booking.createdAt
+      ? new Date(booking.createdAt).toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        })
+      : nowIST);
+
   return (
     `🔔 *नया बुकिंग व पेमेंट सत्यापन अनुरोध (KSA)*\n\n` +
     `👤 *ग्राहक का नाम:* ${booking.userName}\n` +
     `📱 *मोबाइल नंबर:* ${booking.userPhone}\n` +
-    `⏰ *तारीख व समय:* ${booking.date} (${booking.timeRange || 'चयनित स्लॉट'})\n` +
+    `⏰ *तारीख व स्लॉट:* ${booking.date} (${booking.timeRange || 'चयनित स्लॉट'})\n` +
+    `⏱️ *पेमेंट सबमिशन समय:* ${paymentTime}\n` +
     `🏏 *खेल / सुविधा:* ${sportLabel}${resourceLabel}\n` +
     `💰 *भुगतान राशि:* ₹${booking.amountPaid}\n` +
     `🆔 *बुकिंग ID:* ${booking.id}\n` +
@@ -170,7 +181,7 @@ export function buildOwnerVerificationMessage(
     `${noLink}\n` +
     `━━━━━━━━━━━━━━━━━━━\n` +
     `💬 *ग्राहक से सीधे चैट:* ${clientWaLink}\n` +
-    `💡 *नोट:* आपके YES या NO पर क्लिक करते ही वेबसाइट पर बुकिंग का स्टेटस लाइव अपडेट हो जाएगा और ग्राहक को तत्काल WhatsApp मैसेज पहुँच जाएगा।`
+    `💡 *नोट:* आपके YES या NO पर क्लिक करते ही वेबसाइट पर ग्राहक की स्क्रीन लाइव कन्फर्म हो जाएगी और ग्राहक को तत्काल WhatsApp मैसेज पहुँच जाएगा।`
   );
 }
 
